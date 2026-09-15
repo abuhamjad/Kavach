@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="theme-color" content="#ffffff"/>
+  <title>SENTINEL · Mobile</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;overflow:hidden;background:#f2f2f7;color:#1c1c1e;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+    :root{
+      --red:#e30613;--red-light:#fff0f0;--red-mid:#ffd5d5;
+      --green:#34c759;--orange:#ff9500;--blue:#007aff;
+      --bg:#f2f2f7;--card:#ffffff;--border:#e5e5ea;
+      --text-primary:#1c1c1e;--text-secondary:#6d6d72;--text-tertiary:#aeaeb2;
+      --safe-top:env(safe-area-inset-top,0px);
+      --safe-bot:env(safe-area-inset-bottom,0px);
+    }
+    #app{height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+    /* Auth */
+    #auth-screen{position:fixed;inset:0;z-index:1000;background:#f2f2f7;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .auth-card{background:#fff;border-radius:20px;padding:40px 28px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.12);max-width:340px;width:100%;}
+    .auth-icon{width:72px;height:72px;border-radius:18px;border:2px solid #ffd5d5;background:#fff0f0;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;}
+    .auth-title{font-size:1.3rem;font-weight:800;letter-spacing:0.02em;margin-bottom:12px;}
+    .auth-desc{font-size:0.9rem;color:#6d6d72;line-height:1.6;margin-bottom:32px;}
+    .auth-btn{width:100%;padding:16px;border-radius:14px;background:var(--red);color:#fff;border:none;font-size:0.9rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 20px rgba(227,6,19,0.35);}
+    .auth-btn:active{transform:scale(0.97);}
+
+    /* Header */
+    #header{flex-shrink:0;background:#fff;border-bottom:1px solid var(--border);padding:12px 16px;padding-top:calc(12px + var(--safe-top));display:flex;align-items:center;justify-content:space-between;}
+    .hdr-logo{display:flex;align-items:center;gap:10px;}
+    .hdr-icon{width:34px;height:34px;border-radius:9px;background:#fff0f0;border:1.5px solid #ffd5d5;display:flex;align-items:center;justify-content:center;color:var(--red);}
+    .hdr-title{font-size:1rem;font-weight:800;letter-spacing:0.01em;}
+    .hdr-sub{font-size:0.62rem;color:var(--text-secondary);letter-spacing:0.05em;text-transform:uppercase;}
+    .live-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:#f2f2f7;}
+    .live-dot{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);}
+    .live-dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(52,199,89,0.2);}
+    .live-label{font-size:0.65rem;font-weight:600;color:var(--text-secondary);letter-spacing:0.05em;}
+    .live-label.on{color:var(--green);}
+
+    /* Toast */
+    #toast-container{position:fixed;top:0;left:0;right:0;z-index:500;padding:8px 12px;padding-top:calc(8px + var(--safe-top));display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+    .toast{background:#fff;border-radius:14px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,0.18);pointer-events:all;transform:translateY(-120%);transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);border-left:3px solid var(--orange);}
+    .toast.critical{border-left-color:var(--red);}
+    .toast.show{transform:translateY(0);}
+    .toast-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#fff8e6;}
+    .toast.critical .toast-icon{background:#fff0f0;}
+    .toast-body{flex:1;}
+    .toast-title{font-size:0.82rem;font-weight:700;margin-bottom:2px;}
+    .toast.critical .toast-title{color:var(--red);}
+    .toast-time{font-size:0.7rem;color:var(--text-secondary);}
+    .toast-silence{background:#1c1c1e;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:0.65rem;font-weight:600;letter-spacing:0.05em;cursor:pointer;align-self:center;flex-shrink:0;}
+
+    /* Content */
+    #content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(80px + var(--safe-bot));}
+    .page{padding:16px;display:flex;flex-direction:column;gap:12px;}
+    .page.hidden{display:none!important;}
+
+    /* Cards */
+    .card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+    .card-header{display:flex;align-items:center;gap:8px;padding:12px 16px 10px;border-bottom:1px solid var(--border);}
+    .card-header-icon{color:var(--text-tertiary);}
+    .card-header-title{font-size:0.72rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);flex:1;}
+    .card-header-badge{font-size:0.72rem;font-weight:700;color:var(--red);}
+
+    /* Threat */
+    #threat-card{background:#fff;border-radius:16px;padding:18px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;}
+    #threat-card.HIGH{background:#fff0f0;border:1px solid #ffd5d5;}
+    #threat-card.MEDIUM{background:#fff8e6;border:1px solid #ffe5a0;}
+    #threat-card.LOW{background:#f0fff4;border:1px solid #b7f5c9;}
+    .threat-label-sm{font-size:0.62rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;}
+    #threat-value{font-size:2rem;font-weight:800;letter-spacing:0.02em;}
+    #threat-value.HIGH{color:var(--red);}
+    #threat-value.MEDIUM{color:var(--orange);}
+    #threat-value.LOW{color:var(--green);}
+    .threat-badge{padding:6px 14px;border-radius:20px;font-size:0.72rem;font-weight:700;letter-spacing:0.06em;}
+    .threat-badge.HIGH{background:var(--red);color:#fff;}
+    .threat-badge.MEDIUM{background:var(--orange);color:#fff;}
+    .threat-badge.LOW{background:var(--green);color:#fff;}
+
+    /* Stats */
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);}
+    .stat-cell{background:#fff;padding:16px;}
+    .stat-num{font-size:2.2rem;font-weight:800;line-height:1;color:var(--red);}
+    .stat-num.v{color:#cc5500;} .stat-num.z{color:var(--blue);} .stat-num.a{color:var(--orange);}
+    .stat-lbl{font-size:0.62rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);margin-top:4px;}
+
+    /* Surge only */
+    .cond-cell{background:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;}
+    .cond-indicator{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0;}
+    .cond-indicator.active{background:var(--red);box-shadow:0 0 0 3px rgba(227,6,19,0.15);}
+    .cond-name{font-size:0.72rem;font-weight:600;letter-spacing:0.05em;color:var(--text-secondary);}
+    .cond-status{font-size:0.65rem;font-weight:500;color:var(--text-tertiary);}
+    .cond-status.active{color:var(--red);font-weight:600;}
+
+    /* Zones */
+    .zone-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+    .zone-row:last-child{border-bottom:none;}
+    .zone-name{font-size:0.9rem;font-weight:600;margin-bottom:3px;}
+    .zone-detail{font-size:0.72rem;color:var(--text-secondary);}
+    .zone-badge{padding:4px 12px;border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;}
+    .zone-badge.HIGH{background:#fff0f0;color:var(--red);}
+    .zone-badge.MEDIUM{background:#fff8e6;color:var(--orange);}
+    .zone-badge.LOW{background:#f0fff4;color:var(--green);}
+
+    /* Alerts */
+    .alert-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;}
+    .alert-row:last-child{border-bottom:none;}
+    .alert-icon{width:34px;height:34px;border-radius:10px;background:#fff8e6;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--orange);}
+    .alert-icon.critical{background:#fff0f0;color:var(--red);}
+    .alert-row-body{flex:1;}
+    .alert-time-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+    .alert-time-text{font-size:0.72rem;font-weight:500;color:var(--text-secondary);}
+    .alert-severity{font-size:0.62rem;font-weight:700;letter-spacing:0.06em;padding:2px 8px;border-radius:6px;}
+    .alert-severity.CRITICAL{background:#fff0f0;color:var(--red);}
+    .alert-severity.WARNING{background:#fff8e6;color:var(--orange);}
+    .alert-msg{font-size:0.85rem;font-weight:500;line-height:1.4;}
+    .alert-actions{display:flex;gap:6px;margin-top:8px;}
+    .alert-action-btn{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:600;letter-spacing:0.04em;border:none;cursor:pointer;}
+    .btn-analyze{background:#1c1c1e;color:#fff;}
+    .btn-silence{background:#f2f2f7;color:var(--text-primary);}
+
+    /* Graph */
+    .graph-tabs{display:flex;gap:0;background:#f2f2f7;border-radius:10px;padding:2px;margin:12px 16px 10px;}
+    .g-tab{flex:1;text-align:center;padding:7px;border-radius:8px;font-size:0.72rem;font-weight:600;color:var(--text-secondary);border:none;background:transparent;cursor:pointer;}
+    .g-tab.active{background:#fff;color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+    #graph-canvas{width:100%;display:block;padding:0 16px 16px;}
+
+    /* Mode toggles */
+    .mode-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+    .mode-row:last-child{border-bottom:none;}
+    .mode-name{font-size:0.9rem;font-weight:600;margin-bottom:2px;}
+    .mode-desc{font-size:0.72rem;color:var(--text-secondary);}
+    .ios-toggle{position:relative;width:51px;height:31px;flex-shrink:0;}
+    .ios-toggle input{opacity:0;width:0;height:0;}
+    .ios-toggle-track{position:absolute;inset:0;border-radius:16px;background:#e5e5ea;transition:background 0.2s;cursor:pointer;}
+    .ios-toggle input:checked+.ios-toggle-track{background:var(--red);}
+    .ios-toggle-thumb{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);transition:left 0.2s;pointer-events:none;}
+    .ios-toggle input:checked~.ios-toggle-thumb{left:22px;}
+
+    /* Source switcher */
+    .source-card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+    .source-input-row{display:flex;gap:0;border-bottom:1px solid var(--border);}
+    .source-field{flex:1;padding:14px 16px;font-size:0.82rem;border:none;outline:none;font-family:'Inter',sans-serif;color:var(--text-primary);}
+    .source-field::placeholder{color:var(--text-tertiary);}
+    .source-apply{padding:14px 16px;background:var(--red);color:#fff;border:none;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;cursor:pointer;white-space:nowrap;}
+    .source-apply:active{background:#cc0000;}
+    .source-status-row{padding:10px 16px;font-size:0.72rem;color:var(--text-secondary);}
+
+    /* Config rows */
+    .config-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+    .config-row:last-child{border-bottom:none;}
+    .config-label{font-size:0.9rem;font-weight:500;}
+    .config-value{font-size:0.85rem;color:var(--text-secondary);}
+
+    /* Bottom nav */
+    #bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);display:flex;align-items:stretch;padding-bottom:var(--safe-bot);z-index:100;}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;gap:3px;border:none;background:transparent;cursor:pointer;color:var(--text-tertiary);transition:color 0.15s;position:relative;}
+    .nav-item.active{color:var(--red);}
+    .nav-label{font-size:0.6rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;}
+    .nav-badge{position:absolute;top:6px;right:calc(50% - 14px);background:var(--red);color:#fff;font-size:0.55rem;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 4px;}
+    .nav-badge.show{display:flex;}
+
+    .empty-state{padding:32px 16px;text-align:center;color:var(--text-tertiary);font-size:0.82rem;}
+    .section-label{font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);padding:16px 16px 8px;}
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div id="auth-screen">
+    <div class="auth-card">
+      <div class="auth-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e30613" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="auth-title">SENTINEL SYSTEM</div>
+      <div class="auth-desc">Tactical link established. System requires manual authorization to enable audio-visual alerts and real-time monitoring.</div>
+      <button class="auth-btn" onclick="authorize()">AUTHORIZE SYSTEM LINK</button>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <div id="header">
+    <div class="hdr-logo">
+      <div class="hdr-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div>
+        <div class="hdr-title">SENTINEL</div>
+        <div class="hdr-sub">MOBILE UNIT ALPHA</div>
+      </div>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot" id="live-dot"></div>
+      <span class="live-label" id="live-label">OFFLINE</span>
+    </div>
+  </div>
+
+  <div id="content">
+
+    <!-- MONITOR TAB -->
+    <div class="page" id="page-monitor">
+
+      <div class="card" id="threat-card">
+        <div>
+          <div class="threat-label-sm">OVERALL THREAT</div>
+          <div id="threat-value" class="LOW">LOW</div>
+          <div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:2px" id="threat-timestamp">--:--:--</div>
+        </div>
+        <div id="threat-badge" class="threat-badge LOW">NOMINAL</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span class="card-header-title">LIVE COUNTS</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-cell"><div class="stat-num" id="s-persons">0</div><div class="stat-lbl">PERSONS</div></div>
+          <div class="stat-cell"><div class="stat-num v" id="s-vehicles">0</div><div class="stat-lbl">VEHICLES</div></div>
+          <div class="stat-cell"><div class="stat-num z" id="s-zones">0</div><div class="stat-lbl">ZONES</div></div>
+          <div class="stat-cell"><div class="stat-num a" id="s-alerts">0</div><div class="stat-lbl">ALERTS</div></div>
+        </div>
+      </div>
+
+      <!-- Surge only (night mode removed) -->
+      <div class="card">
+        <div class="card-header">
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span class="card-header-title">CONDITIONS</span>
+        </div>
+        <div class="cond-cell">
+          <div class="cond-indicator" id="cond-surge-dot"></div>
+          <div>
+            <div class="cond-name">CROWD SURGE</div>
+            <div class="cond-status" id="cond-surge-status">CLEAR</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="card-header-title">THREAT ASSESSMENT</span>
+          <span id="overall-badge" class="threat-badge LOW" style="font-size:0.62rem;padding:3px 10px">NOMINAL</span>
+        </div>
+        <div id="zones-list"><div class="empty-state">No zones defined</div></div>
+      </div>
+
+    </div>
+
+    <!-- ALERTS TAB -->
+    <div class="page hidden" id="page-alerts">
+      <div class="card">
+        <div class="card-header">
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="card-header-title">RECENT ALERTS</span>
+          <span class="card-header-badge" id="alert-count-label"></span>
+        </div>
+        <div id="alerts-list"><div class="empty-state">No events recorded</div></div>
+      </div>
+    </div>
+
+    <!-- CONFIG TAB -->
+    <div class="page hidden" id="page-config">
+
+      <div class="section-label">CHANGE SOURCE</div>
+      <div class="source-card">
+        <div class="source-input-row">
+          <input class="source-field" id="source-input" type="text" placeholder="test.mp4 or YouTube URL"/>
+          <button class="source-apply" onclick="applySource()">APPLY</button>
+        </div>
+        <div class="source-status-row" id="source-status-row">
+          Current: <span id="current-source-label" style="color:#1c1c1e;font-weight:600">--</span>
+        </div>
+      </div>
+
+      <div class="section-label">ACTIVE MODULES</div>
+      <div class="card">
+        <!-- Night mode removed -->
+        <div class="mode-row">
+          <div>
+            <div class="mode-name">Loiter Detection</div>
+            <div class="mode-desc">Flag persons staying too long</div>
+          </div>
+          <label class="ios-toggle">
+            <input type="checkbox" id="tog-loitering" checked onchange="toggleMode('loitering',this.checked)"/>
+            <div class="ios-toggle-track"></div>
+            <div class="ios-toggle-thumb"></div>
+          </label>
+        </div>
+        <div class="mode-row">
+          <div>
+            <div class="mode-name">Surge Detection</div>
+            <div class="mode-desc">Detect sudden crowd increases</div>
+          </div>
+          <label class="ios-toggle">
+            <input type="checkbox" id="tog-surge" checked onchange="toggleMode('surge',this.checked)"/>
+            <div class="ios-toggle-track"></div>
+            <div class="ios-toggle-thumb"></div>
+          </label>
+        </div>
+      </div>
+
+      <div class="section-label">ACTIVITY GRAPH</div>
+      <div class="card">
+        <div class="graph-tabs">
+          <button class="g-tab active" onclick="setGraphTab('RT',this)">Realtime</button>
+          <button class="g-tab" onclick="setGraphTab('1M',this)">1 Min</button>
+          <button class="g-tab" onclick="setGraphTab('5M',this)">5 Min</button>
+        </div>
+        <canvas id="graph-canvas" height="140"></canvas>
+      </div>
+
+      <div class="section-label">SYSTEM INFO</div>
+      <div class="card">
+        <div class="config-row"><span class="config-label">Connection</span><span class="config-value" id="cfg-conn">Offline</span></div>
+        <div class="config-row"><span class="config-label">Server</span><span class="config-value" id="cfg-server"></span></div>
+        <div class="config-row"><span class="config-label">Last Update</span><span class="config-value" id="cfg-update">Never</span></div>
+        <div class="config-row"><span class="config-label">Alerts Received</span><span class="config-value" id="cfg-total">0</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="bottom-nav">
+    <button class="nav-item active" onclick="switchTab('monitor',this)">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span class="nav-label">Monitor</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('alerts',this)">
+      <div class="nav-badge" id="alert-nav-badge"></div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="nav-label">Alerts</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('config',this)">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="nav-label">Config</span>
+    </button>
+  </div>
+</div>
+
+<script>
+const HOST   = location.hostname;
+const WS_URL = `ws://${HOST}:8000/ws`;
+const API    = `http://${HOST}:8000`;
+
+let authorized=false, audioCtx=null;
+let state={zones:[],alerts:[],persons:0,vehicles:0,surge:false,modes:{loitering:true,surge:true},threat:'LOW'};
+let prevAlertCount=0, totalAlerts=0, lastHighThreat=false;
+let graphTab='RT', realtimeH=[], perSecH=[], per10sH=[];
+let secBucket=[], sec10Bucket=[], lastSecT=0, last10sT=0;
+
+function authorize(){
+  try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  authorized=true;
+  document.getElementById('auth-screen').style.display='none';
+  connect();
+}
+
+function playAlert(type){
+  if(!audioCtx) return;
+  const freqs=type==='critical'?[880,1100,880,1100]:[660,880];
+  const dur=type==='critical'?0.12:0.1;
+  let time=audioCtx.currentTime;
+  freqs.forEach((f,i)=>{
+    const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+    osc.connect(gain);gain.connect(audioCtx.destination);
+    osc.frequency.value=f;osc.type='square';
+    gain.gain.setValueAtTime(0.08,time+i*dur);
+    gain.gain.exponentialRampToValueAtTime(0.001,time+i*dur+dur*0.9);
+    osc.start(time+i*dur);osc.stop(time+i*dur+dur);
+  });
+}
+
+function playHighThreat(){
+  if(!audioCtx) return;
+  const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+  osc.connect(gain);gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(440,audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(220,audioCtx.currentTime+0.5);
+  osc.type='sawtooth';
+  gain.gain.setValueAtTime(0.06,audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.6);
+  osc.start(audioCtx.currentTime);osc.stop(audioCtx.currentTime+0.6);
+}
+
+function showToast(msg,time,isCritical){
+  const id=Date.now()+'_'+Math.random();
+  const container=document.getElementById('toast-container');
+  const el=document.createElement('div');
+  el.className=`toast ${isCritical?'critical':''}`;
+  el.id='toast_'+id;
+  el.innerHTML=`
+    <div class="toast-icon">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${isCritical?'#e30613':'#ff9500'}" stroke-width="2.5">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </div>
+    <div class="toast-body"><div class="toast-title">${msg}</div><div class="toast-time">${time}</div></div>
+    <button class="toast-silence" onclick="dismissToast('${id}')">SILENCE</button>
+  `;
+  container.appendChild(el);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('show')));
+  if(navigator.vibrate) navigator.vibrate(isCritical?[100,50,100,50,200]:[100,50,100]);
+  setTimeout(()=>dismissToast(id),5000);
+}
+
+function dismissToast(id){
+  const el=document.getElementById('toast_'+id);
+  if(!el) return;
+  el.classList.remove('show');
+  setTimeout(()=>el.remove(),400);
+}
+
+let ws;
+function connect(){
+  ws=new WebSocket(WS_URL);
+  ws.onopen=()=>{
+    document.getElementById('live-dot').classList.add('on');
+    document.getElementById('live-label').classList.add('on');
+    document.getElementById('live-label').textContent='LIVE';
+    document.getElementById('cfg-conn').textContent='Connected';
+    document.getElementById('cfg-server').textContent=HOST+':8000';
+  };
+  ws.onclose=()=>{
+    document.getElementById('live-dot').classList.remove('on');
+    document.getElementById('live-label').classList.remove('on');
+    document.getElementById('live-label').textContent='OFFLINE';
+    document.getElementById('cfg-conn').textContent='Offline';
+    setTimeout(connect,2000);
+  };
+  ws.onmessage=e=>{
+    const d=JSON.parse(e.data);
+    const now=Date.now();
+    if(d.zones)  state.zones  =d.zones;
+    if(d.alerts) state.alerts =d.alerts;
+    if(d.total_persons !==undefined) state.persons =d.total_persons;
+    if(d.total_vehicles!==undefined) state.vehicles=d.total_vehicles;
+    if(d.surge  !==undefined) state.surge =d.surge;
+    if(d.modes)  state.modes  =d.modes;
+    if(d.current_source){
+      document.getElementById('current-source-label').textContent=d.current_source;
+      const inp=document.getElementById('source-input');
+      if(!inp.value) inp.value=d.current_source;
+    }
+    state.threat=state.zones.reduce((acc,z)=>{if(z.threat==='HIGH')return'HIGH';if(z.threat==='MEDIUM'&&acc!=='HIGH')return'MEDIUM';return acc;},'LOW');
+    const maxT=state.threat==='HIGH'?3:state.threat==='MEDIUM'?2:1;
+    const hasNew=state.alerts.length>prevAlertCount;
+    if(hasNew&&authorized){
+      state.alerts.slice(prevAlertCount).forEach(a=>{
+        const isCrit=a.msg.toLowerCase().includes('suspicious')||a.msg.toLowerCase().includes('high')||state.threat==='HIGH';
+        showToast(a.msg,a.time,isCrit);playAlert(isCrit?'critical':'warning');
+      });
+      totalAlerts+=(state.alerts.length-prevAlertCount);
+    }
+    prevAlertCount=state.alerts.length;
+    if(state.threat==='HIGH'&&!lastHighThreat&&authorized){playHighThreat();if(navigator.vibrate)navigator.vibrate([200,100,200,100,400]);}
+    lastHighThreat=state.threat==='HIGH';
+    const entry={t:new Date().toLocaleTimeString(),persons:state.persons,vehicles:state.vehicles,threat:maxT,spike:hasNew?4:null,ts:now};
+    realtimeH.push(entry);if(realtimeH.length>60)realtimeH.shift();
+    secBucket.push(entry);sec10Bucket.push(entry);
+    if(now-lastSecT>=1000){if(secBucket.length){const b=secBucket;perSecH.push({t:new Date().toLocaleTimeString(),persons:avg(b,'persons'),vehicles:avg(b,'vehicles'),threat:Math.max(...b.map(x=>x.threat)),spike:b.some(x=>x.spike)?4:null});if(perSecH.length>60)perSecH.shift();}secBucket=[];lastSecT=now;}
+    if(now-last10sT>=10000){if(sec10Bucket.length){const b=sec10Bucket;per10sH.push({t:new Date().toLocaleTimeString(),persons:avg(b,'persons'),vehicles:avg(b,'vehicles'),threat:Math.max(...b.map(x=>x.threat)),spike:b.some(x=>x.spike)?4:null});if(per10sH.length>30)per10sH.shift();}sec10Bucket=[];last10sT=now;}
+    document.getElementById('cfg-update').textContent=new Date().toLocaleTimeString();
+    document.getElementById('cfg-total').textContent=totalAlerts;
+    render();
+  };
+}
+
+function avg(arr,key){return arr.reduce((s,x)=>s+(x[key]||0),0)/arr.length;}
+
+function render(){
+  const t=state.threat,ts=new Date().toLocaleTimeString();
+  const tc=document.getElementById('threat-card');
+  tc.className='card '+t;
+  const tv=document.getElementById('threat-value');
+  tv.className=t;tv.textContent=t;
+  document.getElementById('threat-timestamp').textContent=ts;
+  const tb=document.getElementById('threat-badge');
+  tb.className=`threat-badge ${t}`;
+  tb.textContent=t==='HIGH'?'CRITICAL':t==='MEDIUM'?'ELEVATED':'NOMINAL';
+  document.getElementById('s-persons').textContent=state.persons;
+  document.getElementById('s-vehicles').textContent=state.vehicles;
+  document.getElementById('s-zones').textContent=state.zones.length;
+  document.getElementById('s-alerts').textContent=state.alerts.length;
+
+  // Surge only
+  const sact=state.surge;
+  document.getElementById('cond-surge-dot').className=`cond-indicator ${sact?'active':''}`;
+  const ss=document.getElementById('cond-surge-status');
+  ss.className=`cond-status ${sact?'active':''}`;ss.textContent=sact?'ACTIVE':'CLEAR';
+
+  // Modes
+  ['loitering','surge'].forEach(m=>{const el=document.getElementById(`tog-${m}`);if(el)el.checked=!!state.modes[m];});
+
+  // Alert badge
+  const nb=document.getElementById('alert-nav-badge');
+  if(state.alerts.length>0){nb.textContent=state.alerts.length;nb.classList.add('show');}
+  else nb.classList.remove('show');
+  const acl=document.getElementById('alert-count-label');
+  acl.textContent=state.alerts.length>0?`${state.alerts.length} Events`:'';
+
+  // Zones
+  const zl=document.getElementById('zones-list');
+  if(state.zones.length===0){zl.innerHTML='<div class="empty-state">No zones defined</div>';}
+  else{zl.innerHTML=state.zones.map(z=>`<div class="zone-row"><div><div class="zone-name">${z.name}</div><div class="zone-detail">${z.persons} PERSONS · ${z.vehicles} VEHICLES</div></div><span class="zone-badge ${z.threat}">${z.threat}</span></div>`).join('');}
+
+  const ob=document.getElementById('overall-badge');
+  ob.className=`threat-badge ${t}`;ob.style.cssText='font-size:0.62rem;padding:3px 10px';
+  ob.textContent=t==='HIGH'?'CRITICAL':t==='MEDIUM'?'ELEVATED':'NOMINAL';
+
+  // Alerts
+  const al=document.getElementById('alerts-list');
+  if(state.alerts.length===0){al.innerHTML='<div class="empty-state">No events recorded</div>';}
+  else{al.innerHTML=[...state.alerts].reverse().map((a,i)=>{
+    const isCrit=a.msg.toLowerCase().includes('suspicious')||a.msg.toLowerCase().includes('high');
+    return `<div class="alert-row"><div class="alert-icon ${isCrit?'critical':''}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="alert-row-body"><div class="alert-time-row"><span class="alert-time-text">${a.time}</span><span class="alert-severity ${isCrit?'CRITICAL':'WARNING'}">${isCrit?'CRITICAL':'WARNING'}</span></div><div class="alert-msg">${a.msg}</div><div class="alert-actions"><button class="alert-action-btn btn-analyze">Analyze</button><button class="alert-action-btn btn-silence">Silence</button></div></div></div>`;
+  }).join('');}
+
+  drawGraph();
+}
+
+function applySource(){
+  const src=document.getElementById('source-input').value.trim();
+  if(!src) return;
+  const btn=document.querySelector('.source-apply');
+  btn.textContent='...'; btn.disabled=true;
+  fetch(API+'/change_source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:src})})
+    .then(r=>{if(r.ok){document.getElementById('current-source-label').textContent=src;btn.textContent='✓';setTimeout(()=>{btn.textContent='APPLY';btn.disabled=false;},2000);}else{btn.textContent='ERR';setTimeout(()=>{btn.textContent='APPLY';btn.disabled=false;},2000);}})
+    .catch(()=>{btn.textContent='ERR';setTimeout(()=>{btn.textContent='APPLY';btn.disabled=false;},2000);});
+}
+
+function setGraphTab(tab,btn){
+  graphTab=tab;
+  document.querySelectorAll('.g-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  drawGraph();
+}
+
+function drawGraph(){
+  const canvas=document.getElementById('graph-canvas');
+  if(!canvas.offsetParent) return;
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.offsetWidth,H=140;
+  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+  const data=graphTab==='RT'?realtimeH:graphTab==='1M'?perSecH:per10sH;
+  if(data.length<2){ctx.fillStyle='#aeaeb2';ctx.font="12px 'Inter',sans-serif";ctx.textAlign='center';ctx.fillText('Awaiting signal...',W/2,H/2);return;}
+  const pad={t:10,r:8,b:32,l:32},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  const maxP=Math.max(...data.map(d=>d.persons),1),maxV=Math.max(...data.map(d=>d.vehicles),1);
+  ctx.strokeStyle='#f0f0f5';ctx.lineWidth=1;
+  [0,0.5,1].forEach(f=>{const y=pad.t+ch*(1-f);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();});
+  ctx.fillStyle='#aeaeb2';ctx.font="9px 'Inter',sans-serif";ctx.textAlign='right';
+  ['L','M','H'].forEach((l,i)=>ctx.fillText(l,pad.l-4,pad.t+ch*(1-i/2)+3));
+  data.forEach((d,i)=>{if(!d.spike)return;const x=pad.l+(i/(data.length-1))*cw;ctx.strokeStyle='rgba(227,6,19,0.2)';ctx.lineWidth=1;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+ch);ctx.stroke();ctx.setLineDash([]);});
+  function drawArea(key,mx,color){
+    const pts=data.map((d,i)=>({x:pad.l+(i/(data.length-1))*cw,y:pad.t+ch*(1-(d[key]||0)/mx)}));
+    const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ch);grad.addColorStop(0,color+'33');grad.addColorStop(1,color+'00');
+    ctx.beginPath();ctx.moveTo(pts[0].x,pad.t+ch);pts.forEach(p=>ctx.lineTo(p.x,p.y));ctx.lineTo(pts[pts.length-1].x,pad.t+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+    ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+  }
+  drawArea('vehicles',maxV,'#cc5500');drawArea('persons',maxP,'#e30613');
+  ctx.textAlign='left';ctx.font="9px 'Inter',sans-serif";
+  [['#e30613','Persons'],['#cc5500','Vehicles']].forEach(([c,l],i)=>{ctx.fillStyle=c;ctx.fillRect(pad.l+i*70,pad.t+ch+12,16,3);ctx.fillStyle='#6d6d72';ctx.fillText(l,pad.l+i*70+20,pad.t+ch+15);});
+}
+
+function switchTab(tab,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.remove('hidden');
+  btn.classList.add('active');
+  if(tab==='alerts')document.getElementById('alert-nav-badge').classList.remove('show');
+  if(tab==='config')setTimeout(drawGraph,100);
+}
+
+function toggleMode(mode,value){
+  state.modes[mode]=value;
+  fetch(API+'/set_mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value})});
+}
+
+setInterval(()=>{const t=new Date().toLocaleTimeString();const el=document.getElementById('threat-timestamp');if(el&&state.threat==='LOW')el.textContent=t;},1000);
+window.addEventListener('resize',drawGraph);
+</script>
+</body>
+</html>

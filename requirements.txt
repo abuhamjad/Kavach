@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Kavach — Border Surveillance System
+#  Python 3.13  ·  install:  pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Web server / API ─────────────────────────────────────────────────────────
+fastapi==0.135.1
+uvicorn==0.41.0
+starlette==0.52.1
+pydantic==2.12.5
+websockets==16.0
+python-multipart==0.0.20
+
+# ── Computer vision / inference ──────────────────────────────────────────────
+ultralytics==8.4.21
+opencv-python==4.11.0.86
+numpy==2.4.3
+
+# NOTE: torch/torchvision are pulled in by ultralytics, but are pinned here so
+# the build is reproducible. For CUDA builds install them FIRST from the
+# PyTorch index, then run this file:
+#   pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu124
+torch==2.10.0
+torchvision==0.25.0
+
+# ── Live stream ingestion ────────────────────────────────────────────────────
+yt-dlp==2026.3.17

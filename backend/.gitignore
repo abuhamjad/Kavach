@@ -1,0 +1,25 @@
+# ── Generated: React build copied in by run.py ───────────────────────────────
+web/static/
+
+# ── Runtime output ───────────────────────────────────────────────────────────
+logs/*.txt
+logs/archive/*.txt
+
+# ── Model weights (large; fetch at setup or use Git LFS) ─────────────────────
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# ── Sample footage ───────────────────────────────────────────────────────────
+data/videos/*.mp4
+data/videos/*.avi
+data/videos/*.mov
+
+# ── Keep the empty folders ───────────────────────────────────────────────────
+!.gitkeep
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+venv/
+.venv/
