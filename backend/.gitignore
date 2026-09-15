@@ -11,9 +11,9 @@ models/*.pth
 models/*.onnx
 
 # ── Sample footage ───────────────────────────────────────────────────────────
-data/videos/*.mp4
-data/videos/*.avi
-data/videos/*.mov
+data/videos/1.mp4
+data/videos/11.mp4
+data/videos/test.mp4
 
 # ── Keep the empty folders ───────────────────────────────────────────────────
 !.gitkeep
