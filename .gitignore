@@ -65,6 +65,9 @@ yarn-error.log*
 # ── Generated: React build copied into the backend by run.py ─────────────────
 backend/web/static/
 
+# ── Local engineering notes (untracked by request) ───────────────────────────
+/frontend/FRONTEND_NOTES.md
+
 # ── Secrets / config ─────────────────────────────────────────────────────────
 .env
 .env.*

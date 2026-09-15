@@ -2,591 +2,1102 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
+  <!-- maximum-scale / user-scalable=no removed: it blocked pinch-zoom, a WCAG
+       1.4.4 failure, and is ignored by modern iOS anyway. -->
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-  <meta name="theme-color" content="#ffffff"/>
-  <title>SENTINEL · Mobile</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <title>Kavach · Mobile Unit</title>
   <style>
+    /* ═══════════════════════════════════════════════════════════════════════
+       Kavach mobile operator view.
+
+       DATA colours below are validated with the dataviz palette validator, not
+       chosen by eye. Before changing --series-* or --threat-*, re-run:
+         node scripts/validate_palette.js "#2a78d6,#eb6834" --mode light --surface "#ffffff"
+         node scripts/validate_palette.js "#3987e5,#d95926" --mode dark  --surface "#1a1a19"
+
+       The previous chart used #e30613 (persons) and #cc5500 (vehicles): CVD ΔE
+       1.2 under deuteranopia and 9.1 with normal vision — the two lines were
+       effectively the same colour. Both replacements clear every gate.
+       ═══════════════════════════════════════════════════════════════════════ */
+
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-    html,body{height:100%;overflow:hidden;background:#f2f2f7;color:#1c1c1e;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+
     :root{
-      --red:#e30613;--red-light:#fff0f0;--red-mid:#ffd5d5;
-      --green:#34c759;--orange:#ff9500;--blue:#007aff;
-      --bg:#f2f2f7;--card:#ffffff;--border:#e5e5ea;
-      --text-primary:#1c1c1e;--text-secondary:#6d6d72;--text-tertiary:#aeaeb2;
+      color-scheme:light dark;
+      --bg:#f2f2f7; --card:#ffffff; --border:#e5e5ea; --raised:#f2f2f7;
+      --text-primary:#1c1c1e; --text-secondary:#5c5c61; --text-tertiary:#8a8a8f;
+      --brand:#c60512;
+
+      /* Categorical — identity. Fixed slots, never cycled. */
+      --series-persons:#2a78d6;
+      --series-vehicles:#eb6834;
+
+      /* Status — reserved. Always paired with a text label, never hue alone.
+         Solid variants are darkened for white-on-colour text contrast. */
+      --threat-low:#0a7d0a;   --threat-low-bg:#eaf8ea;   --threat-low-br:#b7e5b7;
+      --threat-med:#8a5d00;   --threat-med-bg:#fff6e0;   --threat-med-br:#ffe0a0;
+      --threat-high:#c0272d;  --threat-high-bg:#fdecec;  --threat-high-br:#f5c2c2;
+
       --safe-top:env(safe-area-inset-top,0px);
       --safe-bot:env(safe-area-inset-bottom,0px);
+      --shadow:0 1px 4px rgba(0,0,0,0.07);
+      --shadow-lg:0 8px 30px rgba(0,0,0,0.16);
     }
-    #app{height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 
-    /* Auth */
-    #auth-screen{position:fixed;inset:0;z-index:1000;background:#f2f2f7;display:flex;align-items:center;justify-content:center;padding:24px;}
-    .auth-card{background:#fff;border-radius:20px;padding:40px 28px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.12);max-width:340px;width:100%;}
-    .auth-icon{width:72px;height:72px;border-radius:18px;border:2px solid #ffd5d5;background:#fff0f0;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;}
+    /* The desktop console is dark; honouring the OS setting keeps the two
+       consistent for an operator switching between them at night. */
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0d0d0d; --card:#1a1a19; --border:#2f2f2d; --raised:#242422;
+        --text-primary:#f2ebe8; --text-secondary:#b8b0ad; --text-tertiary:#8a8480;
+        --brand:#ff5a5a;
+        --series-persons:#3987e5;
+        --series-vehicles:#d95926;
+        --threat-low:#0ca30c;  --threat-low-bg:rgba(12,163,12,0.14);  --threat-low-br:rgba(12,163,12,0.4);
+        --threat-med:#fab219;  --threat-med-bg:rgba(250,178,25,0.14); --threat-med-br:rgba(250,178,25,0.4);
+        --threat-high:#d03b3b; --threat-high-bg:rgba(208,59,59,0.16); --threat-high-br:rgba(208,59,59,0.45);
+        --shadow:0 1px 4px rgba(0,0,0,0.5);
+        --shadow-lg:0 8px 30px rgba(0,0,0,0.7);
+      }
+    }
+
+    html,body{
+      height:100%;
+      background:var(--bg);
+      color:var(--text-primary);
+      /* System stack — the page previously pulled Inter from the Google Fonts
+         CDN, which broke the project's offline guarantee. System fonts also
+         look native on both platforms. */
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    body{overflow:hidden;}
+
+    /* dvh, not vh: mobile browser toolbars make 100vh overflow. */
+    #app{height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
+
+    button{font-family:inherit;}
+    :focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;}
+
+    /* ── Auth gate ───────────────────────────────────────────────────────── */
+    #auth-screen{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;}
+    .auth-card{background:var(--card);border-radius:20px;padding:40px 28px;text-align:center;box-shadow:var(--shadow-lg);max-width:340px;width:100%;}
+    .auth-icon{width:72px;height:72px;border-radius:18px;border:2px solid var(--threat-high-br);background:var(--threat-high-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;color:var(--brand);}
     .auth-title{font-size:1.3rem;font-weight:800;letter-spacing:0.02em;margin-bottom:12px;}
-    .auth-desc{font-size:0.9rem;color:#6d6d72;line-height:1.6;margin-bottom:32px;}
-    .auth-btn{width:100%;padding:16px;border-radius:14px;background:var(--red);color:#fff;border:none;font-size:0.9rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 20px rgba(227,6,19,0.35);}
+    .auth-desc{font-size:0.9rem;color:var(--text-secondary);line-height:1.6;margin-bottom:32px;}
+    .auth-btn{width:100%;padding:16px;border-radius:14px;background:var(--brand);color:#fff;border:none;font-size:0.9rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;}
     .auth-btn:active{transform:scale(0.97);}
 
-    /* Header */
-    #header{flex-shrink:0;background:#fff;border-bottom:1px solid var(--border);padding:12px 16px;padding-top:calc(12px + var(--safe-top));display:flex;align-items:center;justify-content:space-between;}
-    .hdr-logo{display:flex;align-items:center;gap:10px;}
-    .hdr-icon{width:34px;height:34px;border-radius:9px;background:#fff0f0;border:1.5px solid #ffd5d5;display:flex;align-items:center;justify-content:center;color:var(--red);}
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    #header{flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;padding-top:calc(12px + var(--safe-top));display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .hdr-logo{display:flex;align-items:center;gap:10px;min-width:0;}
+    .hdr-icon{width:34px;height:34px;border-radius:9px;background:var(--threat-high-bg);border:1.5px solid var(--threat-high-br);display:flex;align-items:center;justify-content:center;color:var(--brand);flex-shrink:0;}
     .hdr-title{font-size:1rem;font-weight:800;letter-spacing:0.01em;}
     .hdr-sub{font-size:0.62rem;color:var(--text-secondary);letter-spacing:0.05em;text-transform:uppercase;}
-    .live-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:#f2f2f7;}
+    .live-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:var(--raised);flex-shrink:0;}
     .live-dot{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);}
-    .live-dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(52,199,89,0.2);}
+    .live-dot.on{background:var(--threat-low);box-shadow:0 0 0 3px var(--threat-low-bg);}
     .live-label{font-size:0.65rem;font-weight:600;color:var(--text-secondary);letter-spacing:0.05em;}
-    .live-label.on{color:var(--green);}
+    .live-label.on{color:var(--threat-low);}
 
-    /* Toast */
+    /* ── Toasts ──────────────────────────────────────────────────────────── */
     #toast-container{position:fixed;top:0;left:0;right:0;z-index:500;padding:8px 12px;padding-top:calc(8px + var(--safe-top));display:flex;flex-direction:column;gap:8px;pointer-events:none;}
-    .toast{background:#fff;border-radius:14px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,0.18);pointer-events:all;transform:translateY(-120%);transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);border-left:3px solid var(--orange);}
-    .toast.critical{border-left-color:var(--red);}
+    .toast{background:var(--card);border-radius:14px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;box-shadow:var(--shadow-lg);pointer-events:all;transform:translateY(-120%);transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);border-left:3px solid var(--threat-med);}
+    .toast.critical{border-left-color:var(--threat-high);}
     .toast.show{transform:translateY(0);}
-    .toast-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#fff8e6;}
-    .toast.critical .toast-icon{background:#fff0f0;}
-    .toast-body{flex:1;}
-    .toast-title{font-size:0.82rem;font-weight:700;margin-bottom:2px;}
-    .toast.critical .toast-title{color:var(--red);}
+    .toast-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--threat-med-bg);color:var(--threat-med);}
+    .toast.critical .toast-icon{background:var(--threat-high-bg);color:var(--threat-high);}
+    .toast-body{flex:1;min-width:0;}
+    .toast-title{font-size:0.82rem;font-weight:700;margin-bottom:2px;overflow-wrap:anywhere;}
+    .toast.critical .toast-title{color:var(--threat-high);}
     .toast-time{font-size:0.7rem;color:var(--text-secondary);}
-    .toast-silence{background:#1c1c1e;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:0.65rem;font-weight:600;letter-spacing:0.05em;cursor:pointer;align-self:center;flex-shrink:0;}
+    .toast-silence{background:var(--text-primary);color:var(--card);border:none;border-radius:8px;padding:6px 10px;font-size:0.65rem;font-weight:600;letter-spacing:0.05em;cursor:pointer;align-self:center;flex-shrink:0;}
 
-    /* Content */
-    #content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(80px + var(--safe-bot));}
+    /* ── Content ─────────────────────────────────────────────────────────── */
+    #content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(84px + var(--safe-bot));}
     .page{padding:16px;display:flex;flex-direction:column;gap:12px;}
-    .page.hidden{display:none!important;}
+    .page[hidden]{display:none!important;}
 
-    /* Cards */
-    .card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+    .card{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);}
     .card-header{display:flex;align-items:center;gap:8px;padding:12px 16px 10px;border-bottom:1px solid var(--border);}
-    .card-header-icon{color:var(--text-tertiary);}
-    .card-header-title{font-size:0.72rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);flex:1;}
-    .card-header-badge{font-size:0.72rem;font-weight:700;color:var(--red);}
+    .card-header-icon{color:var(--text-tertiary);flex-shrink:0;}
+    .card-header-title{font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);flex:1;}
+    .card-header-badge{font-size:0.72rem;font-weight:700;color:var(--brand);}
 
-    /* Threat */
-    #threat-card{background:#fff;border-radius:16px;padding:18px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;}
-    #threat-card.HIGH{background:#fff0f0;border:1px solid #ffd5d5;}
-    #threat-card.MEDIUM{background:#fff8e6;border:1px solid #ffe5a0;}
-    #threat-card.LOW{background:#f0fff4;border:1px solid #b7f5c9;}
-    .threat-label-sm{font-size:0.62rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;}
-    #threat-value{font-size:2rem;font-weight:800;letter-spacing:0.02em;}
-    #threat-value.HIGH{color:var(--red);}
-    #threat-value.MEDIUM{color:var(--orange);}
-    #threat-value.LOW{color:var(--green);}
-    .threat-badge{padding:6px 14px;border-radius:20px;font-size:0.72rem;font-weight:700;letter-spacing:0.06em;}
-    .threat-badge.HIGH{background:var(--red);color:#fff;}
-    .threat-badge.MEDIUM{background:var(--orange);color:#fff;}
-    .threat-badge.LOW{background:var(--green);color:#fff;}
+    /* ── Threat ──────────────────────────────────────────────────────────── */
+    #threat-card{border-radius:16px;padding:18px 16px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid transparent;}
+    #threat-card.LOW{background:var(--threat-low-bg);border-color:var(--threat-low-br);}
+    #threat-card.MEDIUM{background:var(--threat-med-bg);border-color:var(--threat-med-br);}
+    #threat-card.HIGH{background:var(--threat-high-bg);border-color:var(--threat-high-br);}
+    .threat-label-sm{font-size:0.62rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;}
+    #threat-value{font-size:2rem;font-weight:800;letter-spacing:0.02em;display:flex;align-items:center;gap:8px;}
+    #threat-value.LOW{color:var(--threat-low);}
+    #threat-value.MEDIUM{color:var(--threat-med);}
+    #threat-value.HIGH{color:var(--threat-high);}
+    .threat-badge{padding:6px 14px;border-radius:20px;font-size:0.72rem;font-weight:700;letter-spacing:0.06em;color:#fff;white-space:nowrap;}
+    .threat-badge.LOW{background:var(--threat-low);}
+    .threat-badge.MEDIUM{background:var(--threat-med);}
+    .threat-badge.HIGH{background:var(--threat-high);}
 
-    /* Stats */
+    /* ── Stats ───────────────────────────────────────────────────────────── */
     .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);}
-    .stat-cell{background:#fff;padding:16px;}
-    .stat-num{font-size:2.2rem;font-weight:800;line-height:1;color:var(--red);}
-    .stat-num.v{color:#cc5500;} .stat-num.z{color:var(--blue);} .stat-num.a{color:var(--orange);}
-    .stat-lbl{font-size:0.62rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);margin-top:4px;}
+    .stat-cell{background:var(--card);padding:16px;}
+    .stat-num{font-size:2.2rem;font-weight:800;line-height:1;}
+    .stat-num.p{color:var(--series-persons);}
+    .stat-num.v{color:var(--series-vehicles);}
+    .stat-num.z{color:var(--text-primary);}
+    .stat-num.a{color:var(--brand);}
+    .stat-lbl{font-size:0.62rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);margin-top:4px;}
 
-    /* Surge only */
-    .cond-cell{background:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;}
+    /* ── Conditions ──────────────────────────────────────────────────────── */
+    .cond-cell{background:var(--card);padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);}
+    .cond-cell:last-child{border-bottom:none;}
     .cond-indicator{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0;}
-    .cond-indicator.active{background:var(--red);box-shadow:0 0 0 3px rgba(227,6,19,0.15);}
-    .cond-name{font-size:0.72rem;font-weight:600;letter-spacing:0.05em;color:var(--text-secondary);}
-    .cond-status{font-size:0.65rem;font-weight:500;color:var(--text-tertiary);}
-    .cond-status.active{color:var(--red);font-weight:600;}
+    .cond-indicator.active{background:var(--threat-med);box-shadow:0 0 0 3px var(--threat-med-bg);}
+    .cond-name{font-size:0.78rem;font-weight:600;letter-spacing:0.04em;color:var(--text-primary);}
+    .cond-status{font-size:0.68rem;font-weight:500;color:var(--text-tertiary);}
+    .cond-status.active{color:var(--threat-med);font-weight:700;}
 
-    /* Zones */
-    .zone-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-    .zone-row:last-child{border-bottom:none;}
-    .zone-name{font-size:0.9rem;font-weight:600;margin-bottom:3px;}
+    /* ── Zones / alerts ──────────────────────────────────────────────────── */
+    .zone-row,.alert-row{padding:14px 16px;border-bottom:1px solid var(--border);}
+    .zone-row:last-child,.alert-row:last-child{border-bottom:none;}
+    .zone-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .zone-name{font-size:0.9rem;font-weight:600;margin-bottom:3px;overflow-wrap:anywhere;}
     .zone-detail{font-size:0.72rem;color:var(--text-secondary);}
-    .zone-badge{padding:4px 12px;border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;}
-    .zone-badge.HIGH{background:#fff0f0;color:var(--red);}
-    .zone-badge.MEDIUM{background:#fff8e6;color:var(--orange);}
-    .zone-badge.LOW{background:#f0fff4;color:var(--green);}
+    .zone-badge{padding:4px 12px;border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;white-space:nowrap;}
+    .zone-badge.LOW{background:var(--threat-low-bg);color:var(--threat-low);}
+    .zone-badge.MEDIUM{background:var(--threat-med-bg);color:var(--threat-med);}
+    .zone-badge.HIGH{background:var(--threat-high-bg);color:var(--threat-high);}
 
-    /* Alerts */
-    .alert-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;}
-    .alert-row:last-child{border-bottom:none;}
-    .alert-icon{width:34px;height:34px;border-radius:10px;background:#fff8e6;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--orange);}
-    .alert-icon.critical{background:#fff0f0;color:var(--red);}
-    .alert-row-body{flex:1;}
-    .alert-time-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+    .alert-row{display:flex;align-items:flex-start;gap:12px;}
+    .alert-icon{width:34px;height:34px;border-radius:10px;background:var(--threat-med-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--threat-med);}
+    .alert-icon.critical{background:var(--threat-high-bg);color:var(--threat-high);}
+    .alert-row-body{flex:1;min-width:0;}
+    .alert-time-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
     .alert-time-text{font-size:0.72rem;font-weight:500;color:var(--text-secondary);}
-    .alert-severity{font-size:0.62rem;font-weight:700;letter-spacing:0.06em;padding:2px 8px;border-radius:6px;}
-    .alert-severity.CRITICAL{background:#fff0f0;color:var(--red);}
-    .alert-severity.WARNING{background:#fff8e6;color:var(--orange);}
-    .alert-msg{font-size:0.85rem;font-weight:500;line-height:1.4;}
-    .alert-actions{display:flex;gap:6px;margin-top:8px;}
-    .alert-action-btn{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:600;letter-spacing:0.04em;border:none;cursor:pointer;}
-    .btn-analyze{background:#1c1c1e;color:#fff;}
-    .btn-silence{background:#f2f2f7;color:var(--text-primary);}
+    .alert-severity{font-size:0.62rem;font-weight:700;letter-spacing:0.06em;padding:2px 8px;border-radius:6px;white-space:nowrap;}
+    .alert-severity.CRITICAL{background:var(--threat-high-bg);color:var(--threat-high);}
+    .alert-severity.WARNING{background:var(--threat-med-bg);color:var(--threat-med);}
+    .alert-msg{font-size:0.85rem;font-weight:500;line-height:1.45;overflow-wrap:anywhere;}
 
-    /* Graph */
-    .graph-tabs{display:flex;gap:0;background:#f2f2f7;border-radius:10px;padding:2px;margin:12px 16px 10px;}
-    .g-tab{flex:1;text-align:center;padding:7px;border-radius:8px;font-size:0.72rem;font-weight:600;color:var(--text-secondary);border:none;background:transparent;cursor:pointer;}
-    .g-tab.active{background:#fff;color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,0.1);}
-    #graph-canvas{width:100%;display:block;padding:0 16px 16px;}
+    /* ── Chart ───────────────────────────────────────────────────────────── */
+    .graph-tabs{display:flex;background:var(--raised);border-radius:10px;padding:2px;margin:12px 16px 10px;}
+    .g-tab{flex:1;text-align:center;padding:8px;border-radius:8px;font-size:0.72rem;font-weight:600;color:var(--text-secondary);border:none;background:transparent;cursor:pointer;}
+    .g-tab[aria-selected="true"]{background:var(--card);color:var(--text-primary);box-shadow:var(--shadow);}
+    .chart-wrap{padding:0 16px 8px;}
+    canvas.chart{width:100%;display:block;}
+    .chart-legend{display:flex;gap:14px;flex-wrap:wrap;padding:0 16px 14px;}
+    .legend-item{display:inline-flex;align-items:center;gap:6px;font-size:0.68rem;font-weight:600;color:var(--text-secondary);}
+    .legend-swatch{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
 
-    /* Mode toggles */
-    .mode-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+    /* ── Mode toggles ────────────────────────────────────────────────────── */
+    .mode-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;}
     .mode-row:last-child{border-bottom:none;}
     .mode-name{font-size:0.9rem;font-weight:600;margin-bottom:2px;}
     .mode-desc{font-size:0.72rem;color:var(--text-secondary);}
-    .ios-toggle{position:relative;width:51px;height:31px;flex-shrink:0;}
-    .ios-toggle input{opacity:0;width:0;height:0;}
-    .ios-toggle-track{position:absolute;inset:0;border-radius:16px;background:#e5e5ea;transition:background 0.2s;cursor:pointer;}
-    .ios-toggle input:checked+.ios-toggle-track{background:var(--red);}
-    .ios-toggle-thumb{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);transition:left 0.2s;pointer-events:none;}
-    .ios-toggle input:checked~.ios-toggle-thumb{left:22px;}
+    .switch{position:relative;width:51px;height:31px;flex-shrink:0;border:none;border-radius:16px;background:var(--border);cursor:pointer;padding:0;transition:background 0.2s;}
+    .switch[aria-checked="true"]{background:var(--threat-low);}
+    .switch:disabled{opacity:0.5;cursor:wait;}
+    .switch::after{content:'';position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.25);transition:left 0.2s;}
+    .switch[aria-checked="true"]::after{left:22px;}
 
-    /* Source switcher */
-    .source-card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
-    .source-input-row{display:flex;gap:0;border-bottom:1px solid var(--border);}
-    .source-field{flex:1;padding:14px 16px;font-size:0.82rem;border:none;outline:none;font-family:'Inter',sans-serif;color:var(--text-primary);}
-    .source-field::placeholder{color:var(--text-tertiary);}
-    .source-apply{padding:14px 16px;background:var(--red);color:#fff;border:none;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;cursor:pointer;white-space:nowrap;}
-    .source-apply:active{background:#cc0000;}
-    .source-status-row{padding:10px 16px;font-size:0.72rem;color:var(--text-secondary);}
-
-    /* Config rows */
-    .config-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+    .config-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;}
     .config-row:last-child{border-bottom:none;}
     .config-label{font-size:0.9rem;font-weight:500;}
-    .config-value{font-size:0.85rem;color:var(--text-secondary);}
+    .config-value{font-size:0.85rem;color:var(--text-secondary);text-align:right;overflow-wrap:anywhere;}
 
-    /* Bottom nav */
-    #bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);display:flex;align-items:stretch;padding-bottom:var(--safe-bot);z-index:100;}
-    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;gap:3px;border:none;background:transparent;cursor:pointer;color:var(--text-tertiary);transition:color 0.15s;position:relative;}
-    .nav-item.active{color:var(--red);}
-    .nav-label{font-size:0.6rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;}
-    .nav-badge{position:absolute;top:6px;right:calc(50% - 14px);background:var(--red);color:#fff;font-size:0.55rem;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 4px;}
+    /* ── Error banner ────────────────────────────────────────────────────── */
+    #error-banner{margin:0 16px;background:var(--threat-high-bg);border:1px solid var(--threat-high-br);color:var(--threat-high);border-radius:12px;padding:10px 14px;font-size:0.76rem;display:flex;align-items:center;gap:8px;}
+    #error-banner[hidden]{display:none;}
+    #error-banner button{margin-left:auto;background:transparent;border:1px solid currentColor;color:inherit;border-radius:8px;padding:3px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;flex-shrink:0;}
+
+    /* ── Bottom nav ──────────────────────────────────────────────────────── */
+    #bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);display:flex;align-items:stretch;padding-bottom:var(--safe-bot);z-index:100;}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:9px 4px;gap:3px;border:none;background:transparent;cursor:pointer;color:var(--text-tertiary);transition:color 0.15s;position:relative;min-height:52px;}
+    .nav-item[aria-selected="true"]{color:var(--brand);}
+    .nav-label{font-size:0.6rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;}
+    .nav-badge{position:absolute;top:6px;right:calc(50% - 16px);background:var(--brand);color:#fff;font-size:0.55rem;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 4px;}
     .nav-badge.show{display:flex;}
+
+    /* Always-visible failure surface. A phone has no console to open, so a JS
+       error must announce itself or it just looks like a dead button. */
+    #boot-error{position:fixed;left:0;right:0;bottom:0;z-index:2000;background:#b3222a;color:#fff;
+      padding:10px 14px;padding-bottom:calc(10px + var(--safe-bot));font-size:0.72rem;line-height:1.45;
+      overflow-wrap:anywhere;}
+    #boot-error[hidden]{display:none;}
 
     .empty-state{padding:32px 16px;text-align:center;color:var(--text-tertiary);font-size:0.82rem;}
     .section-label{font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);padding:16px 16px 8px;}
+
+    @media (prefers-reduced-motion: reduce){
+      *,*::before,*::after{animation-duration:0.001ms!important;animation-iteration-count:1!important;transition-duration:0.001ms!important;}
+      .toast{transform:translateY(0);}
+    }
   </style>
 </head>
 <body>
+<div id="boot-error" hidden role="alert"></div>
 <div id="app">
 
   <div id="auth-screen">
     <div class="auth-card">
       <div class="auth-icon">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e30613" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       </div>
-      <div class="auth-title">SENTINEL SYSTEM</div>
-      <div class="auth-desc">Tactical link established. System requires manual authorization to enable audio-visual alerts and real-time monitoring.</div>
-      <button class="auth-btn" onclick="authorize()">AUTHORIZE SYSTEM LINK</button>
+      <h1 class="auth-title">KAVACH SYSTEM</h1>
+      <p class="auth-desc">Tactical link established. Tap to authorize audio-visual alerts and begin real-time monitoring.</p>
+      <button class="auth-btn" id="auth-btn" type="button">AUTHORIZE SYSTEM LINK</button>
     </div>
   </div>
 
-  <div id="toast-container"></div>
+  <div id="toast-container" aria-live="assertive" aria-relevant="additions"></div>
 
-  <div id="header">
+  <header id="header">
     <div class="hdr-logo">
       <div class="hdr-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       </div>
       <div>
-        <div class="hdr-title">SENTINEL</div>
-        <div class="hdr-sub">MOBILE UNIT ALPHA</div>
+        <div class="hdr-title">KAVACH</div>
+        <div class="hdr-sub">Mobile Unit Alpha</div>
       </div>
     </div>
     <div class="live-badge">
-      <div class="live-dot" id="live-dot"></div>
-      <span class="live-label" id="live-label">OFFLINE</span>
+      <span class="live-dot" id="live-dot" aria-hidden="true"></span>
+      <span class="live-label" id="live-label" role="status">OFFLINE</span>
     </div>
-  </div>
+  </header>
 
   <div id="content">
 
-    <!-- MONITOR TAB -->
-    <div class="page" id="page-monitor">
+    <div class="page" id="page-monitor" role="tabpanel" aria-labelledby="tab-monitor">
+      <div id="error-banner" hidden role="alert">
+        <span id="error-text"></span>
+        <button type="button" id="error-dismiss">DISMISS</button>
+      </div>
 
-      <div class="card" id="threat-card">
+      <div class="card LOW" id="threat-card">
         <div>
-          <div class="threat-label-sm">OVERALL THREAT</div>
+          <div class="threat-label-sm">Overall threat</div>
           <div id="threat-value" class="LOW">LOW</div>
           <div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:2px" id="threat-timestamp">--:--:--</div>
         </div>
-        <div id="threat-badge" class="threat-badge LOW">NOMINAL</div>
+        <span id="threat-badge" class="threat-badge LOW">NOMINAL</span>
       </div>
 
-      <div class="card">
+      <section class="card">
         <div class="card-header">
-          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span class="card-header-title">LIVE COUNTS</span>
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <h2 class="card-header-title">Live counts</h2>
         </div>
         <div class="stats-grid">
-          <div class="stat-cell"><div class="stat-num" id="s-persons">0</div><div class="stat-lbl">PERSONS</div></div>
-          <div class="stat-cell"><div class="stat-num v" id="s-vehicles">0</div><div class="stat-lbl">VEHICLES</div></div>
-          <div class="stat-cell"><div class="stat-num z" id="s-zones">0</div><div class="stat-lbl">ZONES</div></div>
-          <div class="stat-cell"><div class="stat-num a" id="s-alerts">0</div><div class="stat-lbl">ALERTS</div></div>
+          <div class="stat-cell"><div class="stat-num p" id="s-persons">0</div><div class="stat-lbl">Persons</div></div>
+          <div class="stat-cell"><div class="stat-num v" id="s-vehicles">0</div><div class="stat-lbl">Vehicles</div></div>
+          <div class="stat-cell"><div class="stat-num z" id="s-zones">0</div><div class="stat-lbl">Zones</div></div>
+          <div class="stat-cell"><div class="stat-num a" id="s-alerts">0</div><div class="stat-lbl">Alerts</div></div>
         </div>
-      </div>
+      </section>
 
-      <!-- Surge only (night mode removed) -->
-      <div class="card">
+      <section class="card">
         <div class="card-header">
-          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span class="card-header-title">CONDITIONS</span>
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <h2 class="card-header-title">Conditions</h2>
         </div>
         <div class="cond-cell">
-          <div class="cond-indicator" id="cond-surge-dot"></div>
+          <span class="cond-indicator" id="cond-surge-dot" aria-hidden="true"></span>
           <div>
-            <div class="cond-name">CROWD SURGE</div>
+            <div class="cond-name">Crowd surge</div>
             <div class="cond-status" id="cond-surge-status">CLEAR</div>
           </div>
         </div>
-      </div>
+        <!-- Night was previously reported by the backend but never surfaced here. -->
+        <div class="cond-cell">
+          <span class="cond-indicator" id="cond-night-dot" aria-hidden="true"></span>
+          <div>
+            <div class="cond-name">Night mode</div>
+            <div class="cond-status" id="cond-night-status">CLEAR</div>
+          </div>
+        </div>
+      </section>
 
-      <div class="card">
+      <section class="card">
         <div class="card-header">
-          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span class="card-header-title">THREAT ASSESSMENT</span>
-          <span id="overall-badge" class="threat-badge LOW" style="font-size:0.62rem;padding:3px 10px">NOMINAL</span>
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <h2 class="card-header-title">Threat assessment</h2>
+          <span id="overall-badge" class="zone-badge LOW">NOMINAL</span>
         </div>
         <div id="zones-list"><div class="empty-state">No zones defined</div></div>
-      </div>
-
+      </section>
     </div>
 
-    <!-- ALERTS TAB -->
-    <div class="page hidden" id="page-alerts">
-      <div class="card">
+    <div class="page" id="page-alerts" role="tabpanel" aria-labelledby="tab-alerts" hidden>
+      <section class="card">
         <div class="card-header">
-          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span class="card-header-title">RECENT ALERTS</span>
+          <svg class="card-header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <h2 class="card-header-title">Recent alerts</h2>
           <span class="card-header-badge" id="alert-count-label"></span>
         </div>
-        <div id="alerts-list"><div class="empty-state">No events recorded</div></div>
-      </div>
+        <div id="alerts-list" aria-live="polite" aria-relevant="additions"><div class="empty-state">No events recorded</div></div>
+      </section>
     </div>
 
-    <!-- CONFIG TAB -->
-    <div class="page hidden" id="page-config">
+    <div class="page" id="page-config" role="tabpanel" aria-labelledby="tab-config" hidden>
+      <div class="section-label">Active modules</div>
+      <section class="card" id="modes-card"></section>
 
-      <div class="section-label">CHANGE SOURCE</div>
-      <div class="source-card">
-        <div class="source-input-row">
-          <input class="source-field" id="source-input" type="text" placeholder="test.mp4 or YouTube URL"/>
-          <button class="source-apply" onclick="applySource()">APPLY</button>
+      <div class="section-label">Activity</div>
+      <section class="card">
+        <div class="graph-tabs" role="tablist" aria-label="Chart time range">
+          <button class="g-tab" type="button" role="tab" aria-selected="true"  data-range="realtime">12 sec</button>
+          <button class="g-tab" type="button" role="tab" aria-selected="false" data-range="perSec">1 min</button>
+          <button class="g-tab" type="button" role="tab" aria-selected="false" data-range="per10s">5 min</button>
         </div>
-        <div class="source-status-row" id="source-status-row">
-          Current: <span id="current-source-label" style="color:#1c1c1e;font-weight:600">--</span>
-        </div>
-      </div>
 
-      <div class="section-label">ACTIVE MODULES</div>
-      <div class="card">
-        <!-- Night mode removed -->
-        <div class="mode-row">
-          <div>
-            <div class="mode-name">Loiter Detection</div>
-            <div class="mode-desc">Flag persons staying too long</div>
-          </div>
-          <label class="ios-toggle">
-            <input type="checkbox" id="tog-loitering" checked onchange="toggleMode('loitering',this.checked)"/>
-            <div class="ios-toggle-track"></div>
-            <div class="ios-toggle-thumb"></div>
-          </label>
+        <!-- Two plots, one x-axis. The old single canvas drew persons and
+             vehicles each normalised to its OWN maximum while labelling the
+             y-axis L/M/H (threat) — three different scales in one frame. -->
+        <div class="chart-wrap">
+          <canvas class="chart" id="chart-counts" aria-label="Person and vehicle counts over time"></canvas>
         </div>
-        <div class="mode-row">
-          <div>
-            <div class="mode-name">Surge Detection</div>
-            <div class="mode-desc">Detect sudden crowd increases</div>
-          </div>
-          <label class="ios-toggle">
-            <input type="checkbox" id="tog-surge" checked onchange="toggleMode('surge',this.checked)"/>
-            <div class="ios-toggle-track"></div>
-            <div class="ios-toggle-thumb"></div>
-          </label>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--series-persons)"></span>Persons</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--series-vehicles)"></span>Vehicles</span>
         </div>
-      </div>
+        <div class="chart-wrap">
+          <canvas class="chart" id="chart-threat" aria-label="Threat level over time"></canvas>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--threat-med)"></span>Threat level</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--threat-high)"></span>Alert fired</span>
+        </div>
+      </section>
 
-      <div class="section-label">ACTIVITY GRAPH</div>
-      <div class="card">
-        <div class="graph-tabs">
-          <button class="g-tab active" onclick="setGraphTab('RT',this)">Realtime</button>
-          <button class="g-tab" onclick="setGraphTab('1M',this)">1 Min</button>
-          <button class="g-tab" onclick="setGraphTab('5M',this)">5 Min</button>
-        </div>
-        <canvas id="graph-canvas" height="140"></canvas>
-      </div>
-
-      <div class="section-label">SYSTEM INFO</div>
-      <div class="card">
+      <div class="section-label">System info</div>
+      <section class="card">
         <div class="config-row"><span class="config-label">Connection</span><span class="config-value" id="cfg-conn">Offline</span></div>
-        <div class="config-row"><span class="config-label">Server</span><span class="config-value" id="cfg-server"></span></div>
-        <div class="config-row"><span class="config-label">Last Update</span><span class="config-value" id="cfg-update">Never</span></div>
-        <div class="config-row"><span class="config-label">Alerts Received</span><span class="config-value" id="cfg-total">0</span></div>
-      </div>
-
+        <div class="config-row"><span class="config-label">Server</span><span class="config-value" id="cfg-server">—</span></div>
+        <div class="config-row"><span class="config-label">Last update</span><span class="config-value" id="cfg-update">Never</span></div>
+        <div class="config-row"><span class="config-label">Alerts received</span><span class="config-value" id="cfg-total">0</span></div>
+        <div class="config-row">
+          <span class="config-label">Alert sound</span>
+          <button class="switch" type="button" role="switch" aria-checked="true" id="tog-sound" aria-label="Alert sound"></button>
+        </div>
+      </section>
     </div>
   </div>
 
-  <div id="bottom-nav">
-    <button class="nav-item active" onclick="switchTab('monitor',this)">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  <nav id="bottom-nav" role="tablist" aria-label="Sections">
+    <button class="nav-item" type="button" role="tab" id="tab-monitor" aria-selected="true"  aria-controls="page-monitor" data-tab="monitor">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       <span class="nav-label">Monitor</span>
     </button>
-    <button class="nav-item" onclick="switchTab('alerts',this)">
-      <div class="nav-badge" id="alert-nav-badge"></div>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <button class="nav-item" type="button" role="tab" id="tab-alerts" aria-selected="false" aria-controls="page-alerts" data-tab="alerts">
+      <span class="nav-badge" id="alert-nav-badge"></span>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="nav-label">Alerts</span>
     </button>
-    <button class="nav-item" onclick="switchTab('config',this)">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <button class="nav-item" type="button" role="tab" id="tab-config" aria-selected="false" aria-controls="page-config" data-tab="config">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span class="nav-label">Config</span>
     </button>
-  </div>
+  </nav>
 </div>
 
 <script>
-const HOST   = location.hostname;
-const WS_URL = `ws://${HOST}:8000/ws`;
-const API    = `http://${HOST}:8000`;
+(function () {
+'use strict';
+// Scoped in an IIFE so no top-level declaration can collide with a Window
+// property. A bare top-level  wrote to window.history — a
+// getter-only accessor — which threw under strict mode and killed the whole
+// script before any listener was bound: the page rendered but every control
+// was dead. Scoping removes the entire class of bug.
 
-let authorized=false, audioCtx=null;
-let state={zones:[],alerts:[],persons:0,vehicles:0,surge:false,modes:{loitering:true,surge:true},threat:'LOW'};
-let prevAlertCount=0, totalAlerts=0, lastHighThreat=false;
-let graphTab='RT', realtimeH=[], perSecH=[], per10sH=[];
-let secBucket=[], sec10Bucket=[], lastSecT=0, last10sT=0;
+// Installed before anything else can throw: a phone has no console to open, so
+// an uncaught error has to put itself on screen or the page just looks broken.
+function reportFatal(message) {
+  var box = document.getElementById('boot-error');
+  if (!box) return;
+  box.textContent = 'Interface error — ' + message;
+  box.hidden = false;
+}
+window.onerror = function (msg, src, line) {
+  reportFatal(msg + ' (line ' + line + ')');
+};
 
-function authorize(){
-  try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
-  authorized=true;
-  document.getElementById('auth-screen').style.display='none';
-  connect();
+// ═══════════════════════════════════════════════════════════════════════════
+//  Kavach mobile client.
+//
+//  Rewritten to fix, in order of severity:
+//
+//  1. STORED XSS. Zone names and alert messages were interpolated into
+//     innerHTML. Zone names come from /add_zone, which is unauthenticated — any
+//     device on the LAN could POST a zone named `<img src=x onerror=...>` and
+//     get script execution in the operator's browser. Everything user- or
+//     backend-supplied is now written with textContent.
+//  2. Two dead features (change_source -> HTTP 405, current_source never sent).
+//  3. Full DOM rebuild at 20Hz over an uncapped alert list.
+//  4. A chart with three different scales in one frame.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Derived from location, so the page works behind a proxy, on a non-8000 port,
+// and over TLS (ws:// on an https:// page is blocked as mixed content).
+var ORIGIN   = location.origin;
+var WS_URL   = ORIGIN.replace(/^http/, 'ws') + '/ws';
+
+var MAX_ALERTS_RENDERED = 100;
+var MAX_TOASTS = 3;
+var RENDER_HZ = 5;
+var RECONNECT_BASE = 1000, RECONNECT_MAX = 15000;
+var THREAT_ORDER = ['LOW', 'MEDIUM', 'HIGH'];
+
+var MODES = [
+  { key: 'loitering', name: 'Loiter detection', desc: 'Flag persons staying too long' },
+  { key: 'night',     name: 'Night vision',     desc: 'Auto-engage on low light' },
+  { key: 'surge',     name: 'Surge detection',  desc: 'Detect sudden crowd increases' }
+];
+
+var state = {
+  zones: [], alerts: [], persons: 0, vehicles: 0,
+  surge: false, night: false,
+  modes: { loitering: true, night: true, surge: true },
+  threat: 'LOW', setupDone: false
+};
+
+var authorized = false, soundOn = true, audioCtx = null;
+var prevAlertCount = 0, totalAlerts = 0, lastHighThreat = false;
+var activeRange = 'realtime';
+var series = { realtime: [], perSec: [], per10s: [] };
+var secBucket = [], tenBucket = [], lastSecT = 0, lastTenT = 0;
+var pending = null, renderTimer = null;
+
+var $ = function (id) { return document.getElementById(id); };
+
+function threatScore(level) {
+  var i = THREAT_ORDER.indexOf(level);
+  return i === -1 ? 1 : i + 1;
+}
+function scoreToThreat(score) {
+  return THREAT_ORDER[Math.min(3, Math.max(1, Math.round(score))) - 1];
+}
+function badgeWord(t) {
+  return t === 'HIGH' ? 'CRITICAL' : t === 'MEDIUM' ? 'ELEVATED' : 'NOMINAL';
+}
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function playAlert(type){
-  if(!audioCtx) return;
-  const freqs=type==='critical'?[880,1100,880,1100]:[660,880];
-  const dur=type==='critical'?0.12:0.1;
-  let time=audioCtx.currentTime;
-  freqs.forEach((f,i)=>{
-    const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
-    osc.connect(gain);gain.connect(audioCtx.destination);
-    osc.frequency.value=f;osc.type='square';
-    gain.gain.setValueAtTime(0.08,time+i*dur);
-    gain.gain.exponentialRampToValueAtTime(0.001,time+i*dur+dur*0.9);
-    osc.start(time+i*dur);osc.stop(time+i*dur+dur);
+// ── Audio / haptics ────────────────────────────────────────────────────────
+function beep(critical) {
+  if (!audioCtx || !soundOn) return;
+  var freqs = critical ? [880, 1100, 880, 1100] : [660, 880];
+  var dur = critical ? 0.12 : 0.1;
+  var t0 = audioCtx.currentTime;
+  freqs.forEach(function (f, i) {
+    var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.frequency.value = f; osc.type = 'square';
+    gain.gain.setValueAtTime(0.08, t0 + i * dur);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + i * dur + dur * 0.9);
+    osc.start(t0 + i * dur); osc.stop(t0 + i * dur + dur);
   });
 }
 
-function playHighThreat(){
-  if(!audioCtx) return;
-  const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
-  osc.connect(gain);gain.connect(audioCtx.destination);
-  osc.frequency.setValueAtTime(440,audioCtx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(220,audioCtx.currentTime+0.5);
-  osc.type='sawtooth';
-  gain.gain.setValueAtTime(0.06,audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.6);
-  osc.start(audioCtx.currentTime);osc.stop(audioCtx.currentTime+0.6);
+function highThreatTone() {
+  if (!audioCtx || !soundOn) return;
+  var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.5);
+  osc.type = 'sawtooth';
+  gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+  osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.6);
 }
 
-function showToast(msg,time,isCritical){
-  const id=Date.now()+'_'+Math.random();
-  const container=document.getElementById('toast-container');
-  const el=document.createElement('div');
-  el.className=`toast ${isCritical?'critical':''}`;
-  el.id='toast_'+id;
-  el.innerHTML=`
-    <div class="toast-icon">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${isCritical?'#e30613':'#ff9500'}" stroke-width="2.5">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-      </svg>
-    </div>
-    <div class="toast-body"><div class="toast-title">${msg}</div><div class="toast-time">${time}</div></div>
-    <button class="toast-silence" onclick="dismissToast('${id}')">SILENCE</button>
-  `;
+function buzz(pattern) {
+  if (navigator.vibrate && soundOn) { try { navigator.vibrate(pattern); } catch (e) {} }
+}
+
+// ── Toasts (textContent only) ──────────────────────────────────────────────
+var ICON_WARN = 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z';
+
+function showToast(msg, time, critical) {
+  var container = $('toast-container');
+  while (container.children.length >= MAX_TOASTS) container.removeChild(container.firstChild);
+
+  var el = document.createElement('div');
+  el.className = 'toast' + (critical ? ' critical' : '');
+
+  var icon = document.createElement('div');
+  icon.className = 'toast-icon';
+  icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="' + ICON_WARN + '"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+
+  var body = document.createElement('div');
+  body.className = 'toast-body';
+  var title = document.createElement('div');
+  title.className = 'toast-title';
+  title.textContent = msg;                 // ← never innerHTML
+  var stamp = document.createElement('div');
+  stamp.className = 'toast-time';
+  stamp.textContent = time;                // ← never innerHTML
+  body.appendChild(title); body.appendChild(stamp);
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'toast-silence';
+  btn.textContent = 'SILENCE';
+
+  var remove = function () {
+    el.classList.remove('show');
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+  };
+  btn.addEventListener('click', remove);
+
+  el.appendChild(icon); el.appendChild(body); el.appendChild(btn);
   container.appendChild(el);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('show')));
-  if(navigator.vibrate) navigator.vibrate(isCritical?[100,50,100,50,200]:[100,50,100]);
-  setTimeout(()=>dismissToast(id),5000);
+  requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('show'); }); });
+  setTimeout(remove, 5000);
 }
 
-function dismissToast(id){
-  const el=document.getElementById('toast_'+id);
-  if(!el) return;
-  el.classList.remove('show');
-  setTimeout(()=>el.remove(),400);
+// ── Transport ──────────────────────────────────────────────────────────────
+function showError(msg) {
+  $('error-text').textContent = msg;
+  $('error-banner').hidden = false;
 }
 
-let ws;
-function connect(){
-  ws=new WebSocket(WS_URL);
-  ws.onopen=()=>{
-    document.getElementById('live-dot').classList.add('on');
-    document.getElementById('live-label').classList.add('on');
-    document.getElementById('live-label').textContent='LIVE';
-    document.getElementById('cfg-conn').textContent='Connected';
-    document.getElementById('cfg-server').textContent=HOST+':8000';
-  };
-  ws.onclose=()=>{
-    document.getElementById('live-dot').classList.remove('on');
-    document.getElementById('live-label').classList.remove('on');
-    document.getElementById('live-label').textContent='OFFLINE';
-    document.getElementById('cfg-conn').textContent='Offline';
-    setTimeout(connect,2000);
-  };
-  ws.onmessage=e=>{
-    const d=JSON.parse(e.data);
-    const now=Date.now();
-    if(d.zones)  state.zones  =d.zones;
-    if(d.alerts) state.alerts =d.alerts;
-    if(d.total_persons !==undefined) state.persons =d.total_persons;
-    if(d.total_vehicles!==undefined) state.vehicles=d.total_vehicles;
-    if(d.surge  !==undefined) state.surge =d.surge;
-    if(d.modes)  state.modes  =d.modes;
-    if(d.current_source){
-      document.getElementById('current-source-label').textContent=d.current_source;
-      const inp=document.getElementById('source-input');
-      if(!inp.value) inp.value=d.current_source;
-    }
-    state.threat=state.zones.reduce((acc,z)=>{if(z.threat==='HIGH')return'HIGH';if(z.threat==='MEDIUM'&&acc!=='HIGH')return'MEDIUM';return acc;},'LOW');
-    const maxT=state.threat==='HIGH'?3:state.threat==='MEDIUM'?2:1;
-    const hasNew=state.alerts.length>prevAlertCount;
-    if(hasNew&&authorized){
-      state.alerts.slice(prevAlertCount).forEach(a=>{
-        const isCrit=a.msg.toLowerCase().includes('suspicious')||a.msg.toLowerCase().includes('high')||state.threat==='HIGH';
-        showToast(a.msg,a.time,isCrit);playAlert(isCrit?'critical':'warning');
-      });
-      totalAlerts+=(state.alerts.length-prevAlertCount);
-    }
-    prevAlertCount=state.alerts.length;
-    if(state.threat==='HIGH'&&!lastHighThreat&&authorized){playHighThreat();if(navigator.vibrate)navigator.vibrate([200,100,200,100,400]);}
-    lastHighThreat=state.threat==='HIGH';
-    const entry={t:new Date().toLocaleTimeString(),persons:state.persons,vehicles:state.vehicles,threat:maxT,spike:hasNew?4:null,ts:now};
-    realtimeH.push(entry);if(realtimeH.length>60)realtimeH.shift();
-    secBucket.push(entry);sec10Bucket.push(entry);
-    if(now-lastSecT>=1000){if(secBucket.length){const b=secBucket;perSecH.push({t:new Date().toLocaleTimeString(),persons:avg(b,'persons'),vehicles:avg(b,'vehicles'),threat:Math.max(...b.map(x=>x.threat)),spike:b.some(x=>x.spike)?4:null});if(perSecH.length>60)perSecH.shift();}secBucket=[];lastSecT=now;}
-    if(now-last10sT>=10000){if(sec10Bucket.length){const b=sec10Bucket;per10sH.push({t:new Date().toLocaleTimeString(),persons:avg(b,'persons'),vehicles:avg(b,'vehicles'),threat:Math.max(...b.map(x=>x.threat)),spike:b.some(x=>x.spike)?4:null});if(per10sH.length>30)per10sH.shift();}sec10Bucket=[];last10sT=now;}
-    document.getElementById('cfg-update').textContent=new Date().toLocaleTimeString();
-    document.getElementById('cfg-total').textContent=totalAlerts;
-    render();
+function post(path, body) {
+  return fetch(ORIGIN + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function (r) {
+    if (!r.ok) throw new Error(path + ' returned ' + r.status);
+    return r.json().catch(function () { return {}; });
+  });
+}
+
+var ws = null, reconnectTimer = null, attempt = 0;
+
+function setLive(on) {
+  $('live-dot').classList.toggle('on', on);
+  $('live-label').classList.toggle('on', on);
+  $('live-label').textContent = on ? 'LIVE' : 'OFFLINE';
+  $('cfg-conn').textContent = on ? 'Connected' : 'Offline';
+  $('cfg-server').textContent = location.host;
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  var delay = Math.min(RECONNECT_BASE * Math.pow(2, attempt), RECONNECT_MAX);
+  attempt++;
+  reconnectTimer = setTimeout(function () { reconnectTimer = null; connect(); }, delay);
+}
+
+function connect() {
+  try { ws = new WebSocket(WS_URL); }
+  catch (e) { scheduleReconnect(); return; }
+
+  ws.onopen = function () { attempt = 0; setLive(true); };
+  ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  ws.onclose = function () { setLive(false); scheduleReconnect(); };
+
+  ws.onmessage = function (event) {
+    var d;
+    try { d = JSON.parse(event.data); }
+    catch (e) { return; }              // drop the bad frame, keep the stream
+    if (!d || typeof d !== 'object') return;
+    ingest(d);
   };
 }
 
-function avg(arr,key){return arr.reduce((s,x)=>s+(x[key]||0),0)/arr.length;}
+function ingest(d) {
+  if (Array.isArray(d.zones)) state.zones = d.zones;
+  if (Array.isArray(d.alerts)) state.alerts = d.alerts;
+  if (typeof d.total_persons === 'number') state.persons = d.total_persons;
+  if (typeof d.total_vehicles === 'number') state.vehicles = d.total_vehicles;
+  if (typeof d.surge === 'boolean') state.surge = d.surge;
+  if (typeof d.night === 'boolean') state.night = d.night;
+  if (d.modes && typeof d.modes === 'object') state.modes = d.modes;
+  if (typeof d.setup_done === 'boolean') state.setupDone = d.setup_done;
 
-function render(){
-  const t=state.threat,ts=new Date().toLocaleTimeString();
-  const tc=document.getElementById('threat-card');
-  tc.className='card '+t;
-  const tv=document.getElementById('threat-value');
-  tv.className=t;tv.textContent=t;
-  document.getElementById('threat-timestamp').textContent=ts;
-  const tb=document.getElementById('threat-badge');
-  tb.className=`threat-badge ${t}`;
-  tb.textContent=t==='HIGH'?'CRITICAL':t==='MEDIUM'?'ELEVATED':'NOMINAL';
-  document.getElementById('s-persons').textContent=state.persons;
-  document.getElementById('s-vehicles').textContent=state.vehicles;
-  document.getElementById('s-zones').textContent=state.zones.length;
-  document.getElementById('s-alerts').textContent=state.alerts.length;
+  state.threat = state.zones.reduce(function (max, z) {
+    return Math.max(max, threatScore(z && z.threat));
+  }, 1);
+  state.threat = scoreToThreat(state.threat);
 
-  // Surge only
-  const sact=state.surge;
-  document.getElementById('cond-surge-dot').className=`cond-indicator ${sact?'active':''}`;
-  const ss=document.getElementById('cond-surge-status');
-  ss.className=`cond-status ${sact?'active':''}`;ss.textContent=sact?'ACTIVE':'CLEAR';
-
-  // Modes
-  ['loitering','surge'].forEach(m=>{const el=document.getElementById(`tog-${m}`);if(el)el.checked=!!state.modes[m];});
-
-  // Alert badge
-  const nb=document.getElementById('alert-nav-badge');
-  if(state.alerts.length>0){nb.textContent=state.alerts.length;nb.classList.add('show');}
-  else nb.classList.remove('show');
-  const acl=document.getElementById('alert-count-label');
-  acl.textContent=state.alerts.length>0?`${state.alerts.length} Events`:'';
-
-  // Zones
-  const zl=document.getElementById('zones-list');
-  if(state.zones.length===0){zl.innerHTML='<div class="empty-state">No zones defined</div>';}
-  else{zl.innerHTML=state.zones.map(z=>`<div class="zone-row"><div><div class="zone-name">${z.name}</div><div class="zone-detail">${z.persons} PERSONS · ${z.vehicles} VEHICLES</div></div><span class="zone-badge ${z.threat}">${z.threat}</span></div>`).join('');}
-
-  const ob=document.getElementById('overall-badge');
-  ob.className=`threat-badge ${t}`;ob.style.cssText='font-size:0.62rem;padding:3px 10px';
-  ob.textContent=t==='HIGH'?'CRITICAL':t==='MEDIUM'?'ELEVATED':'NOMINAL';
-
-  // Alerts
-  const al=document.getElementById('alerts-list');
-  if(state.alerts.length===0){al.innerHTML='<div class="empty-state">No events recorded</div>';}
-  else{al.innerHTML=[...state.alerts].reverse().map((a,i)=>{
-    const isCrit=a.msg.toLowerCase().includes('suspicious')||a.msg.toLowerCase().includes('high');
-    return `<div class="alert-row"><div class="alert-icon ${isCrit?'critical':''}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="alert-row-body"><div class="alert-time-row"><span class="alert-time-text">${a.time}</span><span class="alert-severity ${isCrit?'CRITICAL':'WARNING'}">${isCrit?'CRITICAL':'WARNING'}</span></div><div class="alert-msg">${a.msg}</div><div class="alert-actions"><button class="alert-action-btn btn-analyze">Analyze</button><button class="alert-action-btn btn-silence">Silence</button></div></div></div>`;
-  }).join('');}
-
-  drawGraph();
-}
-
-function applySource(){
-  const src=document.getElementById('source-input').value.trim();
-  if(!src) return;
-  const btn=document.querySelector('.source-apply');
-  btn.textContent='...'; btn.disabled=true;
-  fetch(API+'/change_source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:src})})
-    .then(r=>{if(r.ok){document.getElementById('current-source-label').textContent=src;btn.textContent='✓';setTimeout(()=>{btn.textContent='APPLY';btn.disabled=false;},2000);}else{btn.textContent='ERR';setTimeout(()=>{btn.textContent='APPLY';btn.disabled=false;},2000);}})
-    .catch(()=>{btn.textContent='ERR';setTimeout(()=>{btn.textContent='APPLY';btn.disabled=false;},2000);});
-}
-
-function setGraphTab(tab,btn){
-  graphTab=tab;
-  document.querySelectorAll('.g-tab').forEach(b=>b.classList.remove('active'));
-  if(btn)btn.classList.add('active');
-  drawGraph();
-}
-
-function drawGraph(){
-  const canvas=document.getElementById('graph-canvas');
-  if(!canvas.offsetParent) return;
-  const dpr=window.devicePixelRatio||1;
-  const W=canvas.offsetWidth,H=140;
-  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.height=H+'px';
-  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
-  const data=graphTab==='RT'?realtimeH:graphTab==='1M'?perSecH:per10sH;
-  if(data.length<2){ctx.fillStyle='#aeaeb2';ctx.font="12px 'Inter',sans-serif";ctx.textAlign='center';ctx.fillText('Awaiting signal...',W/2,H/2);return;}
-  const pad={t:10,r:8,b:32,l:32},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
-  const maxP=Math.max(...data.map(d=>d.persons),1),maxV=Math.max(...data.map(d=>d.vehicles),1);
-  ctx.strokeStyle='#f0f0f5';ctx.lineWidth=1;
-  [0,0.5,1].forEach(f=>{const y=pad.t+ch*(1-f);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();});
-  ctx.fillStyle='#aeaeb2';ctx.font="9px 'Inter',sans-serif";ctx.textAlign='right';
-  ['L','M','H'].forEach((l,i)=>ctx.fillText(l,pad.l-4,pad.t+ch*(1-i/2)+3));
-  data.forEach((d,i)=>{if(!d.spike)return;const x=pad.l+(i/(data.length-1))*cw;ctx.strokeStyle='rgba(227,6,19,0.2)';ctx.lineWidth=1;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+ch);ctx.stroke();ctx.setLineDash([]);});
-  function drawArea(key,mx,color){
-    const pts=data.map((d,i)=>({x:pad.l+(i/(data.length-1))*cw,y:pad.t+ch*(1-(d[key]||0)/mx)}));
-    const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ch);grad.addColorStop(0,color+'33');grad.addColorStop(1,color+'00');
-    ctx.beginPath();ctx.moveTo(pts[0].x,pad.t+ch);pts.forEach(p=>ctx.lineTo(p.x,p.y));ctx.lineTo(pts[pts.length-1].x,pad.t+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-    ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+  // The server's alert list is uncapped and can also reset on restart; treating
+  // any shrink as a reset stops a stale offset from replaying old alerts.
+  if (state.alerts.length < prevAlertCount) prevAlertCount = 0;
+  var fresh = state.alerts.slice(prevAlertCount);
+  if (fresh.length && authorized) {
+    fresh.slice(-MAX_TOASTS).forEach(function (a) {
+      var critical = state.threat === 'HIGH' || /suspicious|intrusion|breach|high/i.test(a.msg || '');
+      showToast(a.msg || '', a.time || '', critical);
+      beep(critical);
+    });
+    buzz([100, 50, 100]);
+    totalAlerts += fresh.length;
   }
-  drawArea('vehicles',maxV,'#cc5500');drawArea('persons',maxP,'#e30613');
-  ctx.textAlign='left';ctx.font="9px 'Inter',sans-serif";
-  [['#e30613','Persons'],['#cc5500','Vehicles']].forEach(([c,l],i)=>{ctx.fillStyle=c;ctx.fillRect(pad.l+i*70,pad.t+ch+12,16,3);ctx.fillStyle='#6d6d72';ctx.fillText(l,pad.l+i*70+20,pad.t+ch+15);});
+  prevAlertCount = state.alerts.length;
+
+  if (state.threat === 'HIGH' && !lastHighThreat && authorized) {
+    highThreatTone();
+    buzz([200, 100, 200, 100, 400]);
+  }
+  lastHighThreat = state.threat === 'HIGH';
+
+  var sample = {
+    persons: state.persons, vehicles: state.vehicles,
+    threat: threatScore(state.threat), alerted: fresh.length > 0
+  };
+  secBucket.push(sample); tenBucket.push(sample);
+  pending = true;
 }
 
-function switchTab(tab,btn){
-  document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
-  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
-  document.getElementById('page-'+tab).classList.remove('hidden');
-  btn.classList.add('active');
-  if(tab==='alerts')document.getElementById('alert-nav-badge').classList.remove('show');
-  if(tab==='config')setTimeout(drawGraph,100);
+// ── Render loop (throttled) ────────────────────────────────────────────────
+function avg(rows, key) {
+  return rows.length ? rows.reduce(function (s, r) { return s + r[key]; }, 0) / rows.length : 0;
+}
+function collapse(rows) {
+  return {
+    persons: avg(rows, 'persons'),
+    vehicles: avg(rows, 'vehicles'),
+    threat: Math.max.apply(null, rows.map(function (r) { return r.threat; })),
+    alerted: rows.some(function (r) { return r.alerted; })
+  };
 }
 
-function toggleMode(mode,value){
-  state.modes[mode]=value;
-  fetch(API+'/set_mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,value})});
+function tick() {
+  var now = Date.now();
+  if (!lastSecT) lastSecT = now;
+  if (!lastTenT) lastTenT = now;
+
+  if (pending) {
+    series.realtime.push({
+      persons: state.persons, vehicles: state.vehicles,
+      threat: threatScore(state.threat),
+      alerted: secBucket.some(function (s) { return s.alerted; })
+    });
+    if (series.realtime.length > 60) series.realtime.shift();
+  }
+
+  if (now - lastSecT >= 1000 && secBucket.length) {
+    series.perSec.push(collapse(secBucket));
+    if (series.perSec.length > 60) series.perSec.shift();
+    secBucket = []; lastSecT = now;
+  }
+  if (now - lastTenT >= 10000 && tenBucket.length) {
+    series.per10s.push(collapse(tenBucket));
+    if (series.per10s.length > 30) series.per10s.shift();
+    tenBucket = []; lastTenT = now;
+  }
+
+  if (pending) {
+    pending = false;
+    $('cfg-update').textContent = new Date().toLocaleTimeString();
+    $('cfg-total').textContent = String(totalAlerts);
+    render();
+  }
 }
 
-setInterval(()=>{const t=new Date().toLocaleTimeString();const el=document.getElementById('threat-timestamp');if(el&&state.threat==='LOW')el.textContent=t;},1000);
-window.addEventListener('resize',drawGraph);
+var lastSig = { zones: '', alerts: '' };
+
+function render() {
+  var t = state.threat;
+
+  $('threat-card').className = 'card ' + t;
+  var tv = $('threat-value');
+  tv.className = t; tv.textContent = t;
+  $('threat-timestamp').textContent = new Date().toLocaleTimeString();
+  var tb = $('threat-badge');
+  tb.className = 'threat-badge ' + t; tb.textContent = badgeWord(t);
+  var ob = $('overall-badge');
+  ob.className = 'zone-badge ' + t; ob.textContent = badgeWord(t);
+
+  $('s-persons').textContent = String(state.persons);
+  $('s-vehicles').textContent = String(state.vehicles);
+  $('s-zones').textContent = String(state.zones.length);
+  $('s-alerts').textContent = String(state.alerts.length);
+
+  setCondition('surge', state.surge);
+  setCondition('night', state.night);
+
+  MODES.forEach(function (m) {
+    var el = $('tog-' + m.key);
+    if (el && !el.disabled) el.setAttribute('aria-checked', String(!!state.modes[m.key]));
+  });
+
+  var nb = $('alert-nav-badge');
+  if (state.alerts.length) { nb.textContent = String(state.alerts.length); nb.classList.add('show'); }
+  else nb.classList.remove('show');
+  $('alert-count-label').textContent = state.alerts.length ? state.alerts.length + ' events' : '';
+
+  // Rebuild lists only when they actually changed — the old code re-created
+  // every zone and alert node on every socket message (20Hz).
+  var zSig = state.zones.map(function (z) { return z.name + z.threat + z.persons + z.vehicles; }).join('|');
+  if (zSig !== lastSig.zones) { lastSig.zones = zSig; renderZones(); }
+
+  var aSig = state.alerts.length + ':' + (state.alerts.length ? state.alerts[state.alerts.length - 1].time : '');
+  if (aSig !== lastSig.alerts) { lastSig.alerts = aSig; renderAlerts(); }
+
+  drawCharts();
+}
+
+function setCondition(key, active) {
+  $('cond-' + key + '-dot').className = 'cond-indicator' + (active ? ' active' : '');
+  var s = $('cond-' + key + '-status');
+  s.className = 'cond-status' + (active ? ' active' : '');
+  s.textContent = active ? 'ACTIVE' : 'CLEAR';
+}
+
+function renderZones() {
+  var list = $('zones-list');
+  list.textContent = '';
+  if (!state.zones.length) {
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No zones defined';
+    list.appendChild(empty);
+    return;
+  }
+  state.zones.forEach(function (z) {
+    var threat = THREAT_ORDER.indexOf(z.threat) === -1 ? 'LOW' : z.threat;
+    var row = document.createElement('div');
+    row.className = 'zone-row';
+
+    var left = document.createElement('div');
+    var name = document.createElement('div');
+    name.className = 'zone-name';
+    name.textContent = z.name;                       // ← was an XSS sink
+    var detail = document.createElement('div');
+    detail.className = 'zone-detail';
+    detail.textContent = (z.persons || 0) + ' persons · ' + (z.vehicles || 0) + ' vehicles';
+    left.appendChild(name); left.appendChild(detail);
+
+    var badge = document.createElement('span');
+    badge.className = 'zone-badge ' + threat;
+    badge.textContent = threat;
+
+    row.appendChild(left); row.appendChild(badge);
+    list.appendChild(row);
+  });
+}
+
+function renderAlerts() {
+  var list = $('alerts-list');
+  list.textContent = '';
+  if (!state.alerts.length) {
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No events recorded';
+    list.appendChild(empty);
+    return;
+  }
+
+  var recent = state.alerts.slice(-MAX_ALERTS_RENDERED).reverse();
+  recent.forEach(function (a) {
+    var msg = a.msg || '';
+    var critical = /suspicious|intrusion|breach|high/i.test(msg);
+
+    var row = document.createElement('div');
+    row.className = 'alert-row';
+
+    var icon = document.createElement('div');
+    icon.className = 'alert-icon' + (critical ? ' critical' : '');
+    icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="' + ICON_WARN + '"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+
+    var body = document.createElement('div');
+    body.className = 'alert-row-body';
+
+    var timeRow = document.createElement('div');
+    timeRow.className = 'alert-time-row';
+    var time = document.createElement('span');
+    time.className = 'alert-time-text';
+    time.textContent = a.time || '';                 // ← was an XSS sink
+    var sev = document.createElement('span');
+    sev.className = 'alert-severity ' + (critical ? 'CRITICAL' : 'WARNING');
+    sev.textContent = critical ? 'CRITICAL' : 'WARNING';
+    timeRow.appendChild(time); timeRow.appendChild(sev);
+
+    var text = document.createElement('div');
+    text.className = 'alert-msg';
+    text.textContent = msg;                          // ← was an XSS sink
+
+    body.appendChild(timeRow); body.appendChild(text);
+    row.appendChild(icon); row.appendChild(body);
+    list.appendChild(row);
+  });
+}
+
+// ── Charts ─────────────────────────────────────────────────────────────────
+function prepCanvas(canvas, height) {
+  if (!canvas.offsetParent) return null;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = canvas.offsetWidth;
+  if (!w) return null;
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(height * dpr);
+  canvas.style.height = height + 'px';
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, height);
+  return { ctx: ctx, w: w, h: height };
+}
+
+function drawCharts() {
+  var data = series[activeRange] || [];
+  drawCounts(data);
+  drawThreat(data);
+}
+
+function drawCounts(data) {
+  var c = prepCanvas($('chart-counts'), 120);
+  if (!c) return;
+  var ctx = c.ctx, W = c.w, H = c.h;
+  var pad = { t: 10, r: 8, b: 16, l: 30 };
+  var cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+
+  if (data.length < 2) { emptyChart(ctx, W, H); return; }
+
+  // ONE shared scale for both series. The old chart normalised persons and
+  // vehicles to separate maxima, so two lines at the same height meant
+  // completely different counts.
+  var peak = Math.max(1, data.reduce(function (m, d) {
+    return Math.max(m, d.persons, d.vehicles);
+  }, 0));
+  var top = Math.max(4, Math.ceil(peak * 1.15));
+
+  ctx.strokeStyle = cssVar('--border'); ctx.lineWidth = 1;
+  ctx.fillStyle = cssVar('--text-tertiary');
+  ctx.font = '9px -apple-system,system-ui,sans-serif';
+  ctx.textAlign = 'right';
+  [0, 0.5, 1].forEach(function (f) {
+    var y = pad.t + ch * (1 - f);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke();
+    ctx.fillText(String(Math.round(top * f)), pad.l - 5, y + 3);
+  });
+
+  [['vehicles', cssVar('--series-vehicles')], ['persons', cssVar('--series-persons')]]
+    .forEach(function (pair) {
+      var key = pair[0], color = pair[1];
+      var pts = data.map(function (d, i) {
+        return {
+          x: pad.l + (i / (data.length - 1)) * cw,
+          y: pad.t + ch * (1 - Math.min(1, (d[key] || 0) / top))
+        };
+      });
+      ctx.beginPath();
+      pts.forEach(function (p, i) { i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+    });
+}
+
+function drawThreat(data) {
+  var c = prepCanvas($('chart-threat'), 74);
+  if (!c) return;
+  var ctx = c.ctx, W = c.w, H = c.h;
+  var pad = { t: 10, r: 8, b: 14, l: 30 };
+  var cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+
+  if (data.length < 2) { emptyChart(ctx, W, H); return; }
+
+  ctx.strokeStyle = cssVar('--border'); ctx.lineWidth = 1;
+  ctx.fillStyle = cssVar('--text-tertiary');
+  ctx.font = '9px -apple-system,system-ui,sans-serif';
+  ctx.textAlign = 'right';
+  ['LOW', 'MED', 'HIGH'].forEach(function (label, i) {
+    var y = pad.t + ch * (1 - i / 2);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke();
+    ctx.fillText(label, pad.l - 5, y + 3);
+  });
+
+  var pts = data.map(function (d, i) {
+    return {
+      x: pad.l + (i / (data.length - 1)) * cw,
+      y: pad.t + ch * (1 - (Math.min(3, Math.max(1, d.threat)) - 1) / 2),
+      alerted: d.alerted
+    };
+  });
+
+  ctx.beginPath();
+  pts.forEach(function (p, i) {
+    if (!i) { ctx.moveTo(p.x, p.y); return; }
+    ctx.lineTo(p.x, pts[i - 1].y);   // stepAfter: threat is ordinal, not continuous
+    ctx.lineTo(p.x, p.y);
+  });
+  ctx.strokeStyle = cssVar('--threat-med'); ctx.lineWidth = 2; ctx.stroke();
+
+  // Markers only where an alert fired, with a surface ring so they read
+  // against the line.
+  pts.forEach(function (p) {
+    if (!p.alerted) return;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = cssVar('--card'); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = cssVar('--threat-high'); ctx.fill();
+  });
+}
+
+function emptyChart(ctx, W, H) {
+  ctx.fillStyle = cssVar('--text-tertiary');
+  ctx.font = '12px -apple-system,system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Awaiting signal…', W / 2, H / 2);
+}
+
+// ── Modes ──────────────────────────────────────────────────────────────────
+function buildModes() {
+  var card = $('modes-card');
+  card.textContent = '';
+  MODES.forEach(function (m) {
+    var row = document.createElement('div');
+    row.className = 'mode-row';
+
+    var label = document.createElement('div');
+    var name = document.createElement('div');
+    name.className = 'mode-name'; name.textContent = m.name;
+    var desc = document.createElement('div');
+    desc.className = 'mode-desc'; desc.textContent = m.desc;
+    label.appendChild(name); label.appendChild(desc);
+
+    var sw = document.createElement('button');
+    sw.type = 'button'; sw.className = 'switch'; sw.id = 'tog-' + m.key;
+    sw.setAttribute('role', 'switch');
+    sw.setAttribute('aria-checked', String(!!state.modes[m.key]));
+    sw.setAttribute('aria-label', m.name);
+
+    sw.addEventListener('click', function () {
+      var next = sw.getAttribute('aria-checked') !== 'true';
+      sw.disabled = true;
+      // Optimistic, but reverted if the server refuses — the old code fired and
+      // forgot, so a failed request left the toggle showing a state the
+      // detector was never in.
+      sw.setAttribute('aria-checked', String(next));
+      post('/set_mode', { mode: m.key, value: next })
+        .then(function () { state.modes[m.key] = next; })
+        .catch(function (err) {
+          sw.setAttribute('aria-checked', String(!next));
+          showError('Could not change ' + m.name + ': ' + err.message);
+        })
+        .then(function () { sw.disabled = false; });
+    });
+
+    row.appendChild(label); row.appendChild(sw);
+    card.appendChild(row);
+  });
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['monitor', 'alerts', 'config'].forEach(function (name) {
+    $('page-' + name).hidden = name !== tab;
+    $('tab-' + name).setAttribute('aria-selected', String(name === tab));
+  });
+  if (tab === 'alerts') $('alert-nav-badge').classList.remove('show');
+  if (tab === 'config') requestAnimationFrame(drawCharts);
+}
+
+// ── Wiring ─────────────────────────────────────────────────────────────────
+//
+// Order and defensiveness here are deliberate. Previously the AUTHORIZE handler
+// was attached last, after three `document.querySelectorAll(...).forEach(...)`
+// calls — and NodeList.prototype.forEach does not exist on older Android
+// WebViews. One TypeError there aborted the whole script, so the page rendered
+// (HTML and CSS are unaffected) but no listener was ever bound and the button
+// did nothing. Auth is now wired first, every other step is isolated, and any
+// failure is surfaced on screen instead of dying silently in a console nobody
+// can open on a phone.
+
+/** NodeList-safe iteration. */
+function each(list, fn) {
+  Array.prototype.forEach.call(list || [], fn);
+}
+
+/** Runs a wiring step so one failure cannot take the rest of the page with it. */
+function safely(label, fn) {
+  try { fn(); }
+  catch (err) { reportFatal(label + ': ' + (err && err.message ? err.message : err)); }
+}
+
+// ── 1. Authorize: bound first, so nothing below can prevent it. ────────────
+$('auth-btn').addEventListener('click', function () {
+  // The AudioContext must be constructed inside a user gesture or mobile
+  // browsers start it suspended — that is what this gate is really for.
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+
+  authorized = true;
+  $('auth-screen').style.display = 'none';
+
+  // Each of these is independent; a failure in one must not leave the operator
+  // staring at an auth screen that will not dismiss.
+  safely('modules', buildModes);
+  safely('status', function () { setLive(false); });
+  safely('connect', connect);
+  safely('render loop', function () {
+    renderTimer = setInterval(tick, 1000 / RENDER_HZ);
+  });
+});
+
+// ── 2. Everything else. ────────────────────────────────────────────────────
+safely('tabs', function () {
+  each(document.querySelectorAll('.nav-item'), function (btn) {
+    btn.addEventListener('click', function () {
+      switchTab(btn.getAttribute('data-tab'));
+    });
+  });
+});
+
+safely('chart ranges', function () {
+  each(document.querySelectorAll('.g-tab'), function (btn) {
+    btn.addEventListener('click', function () {
+      activeRange = btn.getAttribute('data-range');
+      each(document.querySelectorAll('.g-tab'), function (b) {
+        b.setAttribute('aria-selected', String(b === btn));
+      });
+      drawCharts();
+    });
+  });
+});
+
+safely('error banner', function () {
+  $('error-dismiss').addEventListener('click', function () {
+    $('error-banner').hidden = true;
+  });
+});
+
+safely('sound toggle', function () {
+  $('tog-sound').addEventListener('click', function () {
+    soundOn = !soundOn;
+    this.setAttribute('aria-checked', String(soundOn));
+  });
+});
+
+safely('resize', function () {
+  var resizeRaf = 0;
+  window.addEventListener('resize', function () {
+    cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(drawCharts);
+  });
+});
+
+// Clock keeps ticking even when the feed drops, so a stale timestamp can never
+// masquerade as a live one.
+setInterval(function () {
+  if (!authorized) return;
+  $('threat-timestamp').textContent = new Date().toLocaleTimeString();
+}, 1000);
+
+// Deliberate test surface (scripts/mobile-xss-check.js). Nothing else leaks.
+window.__kavach = { ingest: ingest, render: render, switchTab: switchTab, state: state };
+})();
 </script>
 </body>
 </html>

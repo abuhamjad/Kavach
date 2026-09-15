@@ -123,11 +123,14 @@ def point_in_zone(cx, cy, points):
         np.array(points, dtype=np.int32), (cx, cy), False) >= 0
 
 def is_night(frame):
-    return np.mean(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)) < 80
+    # bool(), not the bare comparison: numpy returns np.bool_, which json.dumps
+    # cannot serialize — it crashed the /ws handler the moment night mode engaged.
+    return bool(np.mean(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)) < 80)
 
 def detect_surge(history, current):
     if len(history) >= SURGE_WINDOW:
-        return current - history[-SURGE_WINDOW] >= SURGE_THRESHOLD
+        # Same numpy-bool hazard as is_night() when counts come from numpy types.
+        return bool(current - history[-SURGE_WINDOW] >= SURGE_THRESHOLD)
     return False
 
 def segments_intersect(p1, p2, p3, p4):
