@@ -1,8 +1,12 @@
 {
-  "name": "surveillance-dashboard",
-  "version": "0.1.0",
+  "name": "kavach-console",
+  "version": "2.0.0",
   "private": true,
+  "description": "Kavach border surveillance operator console",
   "dependencies": {
+    "@fontsource/anton": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/share-tech-mono": "^5.3.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -10,13 +14,13 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-scripts": "5.0.1",
-    "recharts": "^3.8.0",
-    "web-vitals": "^2.1.4"
+    "recharts": "^3.8.0"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:ci": "react-scripts test --watchAll=false",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

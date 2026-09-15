@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Kavach",
+  "name": "Kavach — Border Surveillance Console",
+  "description": "Real-time perimeter intrusion detection and operator console.",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +21,7 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "any",
+  "theme_color": "#0d0d0d",
+  "background_color": "#0d0d0d"
 }
