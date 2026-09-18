@@ -44,8 +44,17 @@ class TestConfiguredAssets(unittest.TestCase):
     def test_mobile_page_exists(self):
         self.assertTrue(os.path.isfile(config.MOBILE_PAGE), config.MOBILE_PAGE)
 
-    def test_model_file_exists(self):
-        self.assertTrue(os.path.isfile(config.MODEL_FILE), config.MODEL_FILE)
+    def test_model_file_is_valid_when_present(self):
+        # The weights are gitignored (52MB), so a fresh clone legitimately has
+        # no model. Asserting its presence failed for every new contributor on
+        # their first run; it passed locally only because the file was already
+        # there. Check the path is sane, and the file only when it exists.
+        self.assertTrue(config.MODEL_FILE.endswith(".pt"), config.MODEL_FILE)
+        if not os.path.isfile(config.MODEL_FILE):
+            self.skipTest(
+                f"model weights not downloaded: {config.MODEL_FILE} "
+                f"(see README step 3)")
+        self.assertGreater(os.path.getsize(config.MODEL_FILE), 0)
 
     def test_paths_are_absolute(self):
         for name in ("MODEL_FILE", "VIDEO_FILE", "STATIC_DIR", "MOBILE_PAGE"):

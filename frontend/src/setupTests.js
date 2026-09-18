@@ -19,8 +19,10 @@ global.IntersectionObserver = class {
 };
 
 global.WebSocket = class {
-  constructor(url) {
+  // `protocols` carries the operator token — tests assert on it, so record it.
+  constructor(url, protocols) {
     this.url = url;
+    this.protocols = protocols;
     this.readyState = 0;
   }
   send() {}

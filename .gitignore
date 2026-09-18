@@ -8,7 +8,10 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
+# Anchored: unanchored `build/` matches a directory of that name at any depth,
+# which would silently swallow a legitimate source folder later. The React
+# build output is listed explicitly under Node/React below.
+/build/
 develop-eggs/
 dist/
 eggs/

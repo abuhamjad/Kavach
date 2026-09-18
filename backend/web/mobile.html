@@ -94,6 +94,10 @@
     .auth-desc{font-size:0.9rem;color:var(--text-secondary);line-height:1.6;margin-bottom:32px;}
     .auth-btn{width:100%;padding:16px;border-radius:14px;background:var(--brand);color:#fff;border:none;font-size:0.9rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;}
     .auth-btn:active{transform:scale(0.97);}
+    .auth-btn[disabled]{opacity:0.6;cursor:progress;}
+    .auth-field{width:100%;padding:14px;border-radius:12px;margin-bottom:14px;background:var(--bg);color:var(--text-primary);border:1px solid var(--border);font-size:0.95rem;font-family:inherit;box-sizing:border-box;text-align:center;letter-spacing:0.05em;}
+    .auth-field:focus{outline:2px solid var(--brand);outline-offset:1px;}
+    .auth-error{font-size:0.8rem;color:var(--brand);line-height:1.5;margin-bottom:14px;text-align:left;}
 
     /* ── Header ──────────────────────────────────────────────────────────── */
     #header{flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;padding-top:calc(12px + var(--safe-top));display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -252,8 +256,15 @@
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       </div>
       <h1 class="auth-title">KAVACH SYSTEM</h1>
-      <p class="auth-desc">Tactical link established. Tap to authorize audio-visual alerts and begin real-time monitoring.</p>
-      <button class="auth-btn" id="auth-btn" type="button">AUTHORIZE SYSTEM LINK</button>
+      <p class="auth-desc" id="auth-desc">Enter the operator token shown in the server console to open the link and enable audio-visual alerts.</p>
+      <form id="auth-form">
+        <label class="sr-only" for="auth-token">Operator token</label>
+        <input class="auth-field" id="auth-token" type="password" inputmode="text"
+               autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+               placeholder="OPERATOR TOKEN">
+        <p class="auth-error" id="auth-error" role="alert" hidden></p>
+        <button class="auth-btn" id="auth-btn" type="submit">AUTHORIZE SYSTEM LINK</button>
+      </form>
     </div>
   </div>
 
@@ -437,10 +448,12 @@ window.onerror = function (msg, src, line) {
 //  Rewritten to fix, in order of severity:
 //
 //  1. STORED XSS. Zone names and alert messages were interpolated into
-//     innerHTML. Zone names come from /add_zone, which is unauthenticated — any
+//     innerHTML. Zone names come from /add_zone — then unauthenticated, so any
 //     device on the LAN could POST a zone named `<img src=x onerror=...>` and
-//     get script execution in the operator's browser. Everything user- or
-//     backend-supplied is now written with textContent.
+//     get script execution in the operator's browser. That endpoint now
+//     requires the operator token, but the sink is fixed regardless: everything
+//     user- or backend-supplied is written with textContent. Defence in depth —
+//     an authenticated operator can still fat-finger a name with markup in it.
 //  2. Two dead features (change_source -> HTTP 405, current_source never sent).
 //  3. Full DOM rebuild at 20Hz over an uncapped alert list.
 //  4. A chart with three different scales in one frame.
@@ -450,6 +463,54 @@ window.onerror = function (msg, src, line) {
 // and over TLS (ws:// on an https:// page is blocked as mixed content).
 var ORIGIN   = location.origin;
 var WS_URL   = ORIGIN.replace(/^http/, 'ws') + '/ws';
+
+// ── Operator token ─────────────────────────────────────────────────────────
+//
+// The backend rejects every control endpoint and the telemetry socket without
+// the shared token run.py prints at startup. run.py's mobile URL carries it in
+// the fragment — fragments are never sent to the server, so it stays out of
+// access logs — and we strip it from the address bar once consumed.
+//
+// Not a cookie, deliberately: browsers attach cookies to cross-site requests,
+// so a cookie session would still be forgeable by a hostile page. A custom
+// header cannot be set cross-origin without a preflight the server refuses.
+var TOKEN_KEY = 'kavach.token';
+// Must match config.WS_PROTOCOL / config.WS_TOKEN_PREFIX in backend/app/config.py.
+var WS_PROTOCOL = 'kavach.v1';
+var WS_TOKEN_PREFIX = 'kavach-token.';
+var TOKEN_PATTERN = /^[A-Za-z0-9._~-]{16,}$/;
+
+var token = '';
+
+function storedToken() {
+  try { return sessionStorage.getItem(TOKEN_KEY) || ''; }
+  catch (e) { return ''; }   // private mode / storage blocked — memory only
+}
+
+function rememberToken(value) {
+  token = (value || '').replace(/^\s+|\s+$/g, '');
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch (e) {}
+  return token;
+}
+
+function tokenFromHash() {
+  var hash = location.hash || '';
+  var m = /[#&]token=([^&]+)/.exec(hash);
+  if (!m) return '';
+  var found = decodeURIComponent(m[1]);
+  var rest = hash.replace(/[#&]token=[^&]+/, '').replace(/^[#&]/, '');
+  // replaceState leaves no history entry and no navigation, so the token cannot
+  // linger in the address bar or ride out in a Referer.
+  if (history.replaceState) {
+    history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : ''));
+  }
+  return found;
+}
+
+rememberToken(tokenFromHash() || storedToken());
 
 var MAX_ALERTS_RENDERED = 100;
 var MAX_TOASTS = 3;
@@ -471,7 +532,7 @@ var state = {
 };
 
 var authorized = false, soundOn = true, audioCtx = null;
-var prevAlertCount = 0, totalAlerts = 0, lastHighThreat = false;
+var prevAlertId = 0, totalAlerts = 0, lastHighThreat = false;
 var activeRange = 'realtime';
 var series = { realtime: [], perSec: [], per10s: [] };
 var secBucket = [], tenBucket = [], lastSecT = 0, lastTenT = 0;
@@ -573,12 +634,22 @@ function showError(msg) {
 }
 
 function post(path, body) {
+  var headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
   return fetch(ORIGIN + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify(body)
   }).then(function (r) {
-    if (!r.ok) throw new Error(path + ' returned ' + r.status);
+    if (!r.ok) {
+      var err = new Error(
+        r.status === 401 || r.status === 403
+          ? path + ' rejected — operator token missing, wrong, or expired'
+          : path + ' returned ' + r.status
+      );
+      err.status = r.status;
+      throw err;
+    }
     return r.json().catch(function () { return {}; });
   });
 }
@@ -601,12 +672,26 @@ function scheduleReconnect() {
 }
 
 function connect() {
-  try { ws = new WebSocket(WS_URL); }
+  // The token rides in the subprotocol list — the WebSocket API cannot set
+  // headers, and the server closes the handshake without it.
+  var protocols = token ? [WS_PROTOCOL, WS_TOKEN_PREFIX + token] : [WS_PROTOCOL];
+  try { ws = new WebSocket(WS_URL, protocols); }
   catch (e) { scheduleReconnect(); return; }
 
   ws.onopen = function () { attempt = 0; setLive(true); };
   ws.onerror = function () { try { ws.close(); } catch (e) {} };
-  ws.onclose = function () { setLive(false); scheduleReconnect(); };
+  ws.onclose = function (event) {
+    setLive(false);
+    // 1008 (policy violation) is the server refusing the handshake — bad or
+    // missing token. Redialling with the same credential loops forever, so
+    // forget it and say so instead.
+    if (event && event.code === 1008) {
+      rememberToken('');
+      showError('Link refused: operator token rejected. Reload and enter the current token.');
+      return;
+    }
+    scheduleReconnect();
+  };
 
   ws.onmessage = function (event) {
     var d;
@@ -632,10 +717,15 @@ function ingest(d) {
   }, 1);
   state.threat = scoreToThreat(state.threat);
 
-  // The server's alert list is uncapped and can also reset on restart; treating
-  // any shrink as a reset stops a stale offset from replaying old alerts.
-  if (state.alerts.length < prevAlertCount) prevAlertCount = 0;
-  var fresh = state.alerts.slice(prevAlertCount);
+  // Keyed on the server's monotonic alert id, not on the list getting longer.
+  // The server's log is a fixed-size ring: once it saturates the length stops
+  // changing, and a length-based offset means every later alert goes unnoticed
+  // — no toast, no beep, for the rest of the shift. A lower id than we have
+  // seen means the server restarted, so the offset resets.
+  var newestId = state.alerts.length ? (state.alerts[state.alerts.length - 1].id || 0) : 0;
+  if (newestId < prevAlertId) prevAlertId = 0;
+
+  var fresh = state.alerts.filter(function (a) { return (a.id || 0) > prevAlertId; });
   if (fresh.length && authorized) {
     fresh.slice(-MAX_TOASTS).forEach(function (a) {
       var critical = state.threat === 'HIGH' || /suspicious|intrusion|breach|high/i.test(a.msg || '');
@@ -645,7 +735,7 @@ function ingest(d) {
     buzz([100, 50, 100]);
     totalAlerts += fresh.length;
   }
-  prevAlertCount = state.alerts.length;
+  prevAlertId = Math.max(prevAlertId, newestId);
 
   if (state.threat === 'HIGH' && !lastHighThreat && authorized) {
     highThreatTone();
@@ -744,7 +834,10 @@ function render() {
   var zSig = state.zones.map(function (z) { return z.name + z.threat + z.persons + z.vehicles; }).join('|');
   if (zSig !== lastSig.zones) { lastSig.zones = zSig; renderZones(); }
 
-  var aSig = state.alerts.length + ':' + (state.alerts.length ? state.alerts[state.alerts.length - 1].time : '');
+  // Keyed on the newest id, not the timestamp: alert times have one-second
+  // resolution, so two alerts in the same second produced an identical
+  // signature and the second one never rendered.
+  var aSig = state.alerts.length + ':' + (state.alerts.length ? (state.alerts[state.alerts.length - 1].id || 0) : 0);
   if (aSig !== lastSig.alerts) { lastSig.alerts = aSig; renderAlerts(); }
 
   drawCharts();
@@ -1028,11 +1121,28 @@ function safely(label, fn) {
 }
 
 // ── 1. Authorize: bound first, so nothing below can prevent it. ────────────
-$('auth-btn').addEventListener('click', function () {
-  // The AudioContext must be constructed inside a user gesture or mobile
-  // browsers start it suspended — that is what this gate is really for.
-  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+//
+// This gate now does two separate jobs, and it is worth being explicit about
+// which is which:
+//
+//   1. Access control. The token is verified against /auth/check before it is
+//      stored, so a bad paste fails here instead of silently producing a
+//      console that connects to nothing. Previously this screen was audio
+//      unlock only — the button's wording implied a gate that did not exist.
+//   2. Audio unlock. The AudioContext must be constructed inside a user
+//      gesture or mobile browsers start it suspended.
+//
+// Both must happen in the click handler: constructing the AudioContext after
+// an await loses the gesture on Safari, so it is built first, synchronously.
 
+function authError(message) {
+  var el = $('auth-error');
+  el.textContent = message;          // ← never innerHTML
+  el.hidden = false;
+}
+
+/** Dismiss the gate and bring the console up. */
+function enterConsole() {
   authorized = true;
   $('auth-screen').style.display = 'none';
 
@@ -1044,7 +1154,48 @@ $('auth-btn').addEventListener('click', function () {
   safely('render loop', function () {
     renderTimer = setInterval(tick, 1000 / RENDER_HZ);
   });
+}
+
+$('auth-form').addEventListener('submit', function (event) {
+  event.preventDefault();
+
+  // Built synchronously, inside the gesture — see the note above.
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+
+  var candidate = ($('auth-token').value || '').replace(/^\s+|\s+$/g, '') || token;
+  if (!TOKEN_PATTERN.test(candidate)) {
+    authError('That does not look like a Kavach token. Copy the full value from the server console.');
+    return;
+  }
+
+  var btn = $('auth-btn');
+  btn.disabled = true;
+  btn.textContent = 'VERIFYING…';
+
+  var previous = token;
+  token = candidate;
+  post('/auth/check', {}).then(function () {
+    rememberToken(candidate);
+    enterConsole();
+  }).catch(function (err) {
+    token = previous;
+    btn.disabled = false;
+    btn.textContent = 'AUTHORIZE SYSTEM LINK';
+    authError(
+      err && (err.status === 401 || err.status === 403)
+        ? 'Rejected by the detection server. The token may be from a previous run.'
+        : 'Could not reach the detection server. Check the WiFi connection.'
+    );
+  });
 });
+
+// A token arriving in the URL fragment (run.py's mobile link) still needs one
+// tap to unlock audio, so the gate stays — it just comes pre-filled.
+if (token) {
+  $('auth-token').value = token;
+  $('auth-desc').textContent =
+    'Token received from the server link. Tap to open the link and enable audio-visual alerts.';
+}
 
 // ── 2. Everything else. ────────────────────────────────────────────────────
 safely('tabs', function () {

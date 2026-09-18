@@ -483,6 +483,7 @@ export function Dashboard({ onBack }) {
               onStart={handleStart}
               starting={busy === 'start'}
               containerRef={videoBoxRef}
+              frameSize={telemetry.frameSize}
             />
           </section>
 

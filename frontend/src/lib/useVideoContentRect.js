@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FRAME_H, FRAME_W } from '../theme';
+import { DEFAULT_FRAME_SIZE } from '../theme';
 
 /**
  * Geometry of the *letterboxed video content* inside its container.
@@ -15,9 +15,12 @@ import { FRAME_H, FRAME_W } from '../theme';
  * factor, so the overlay canvas can be positioned dead-on and clicks converted
  * exactly.
  */
-export function useVideoContentRect(containerRef) {
+export function useVideoContentRect(containerRef, frameSize = DEFAULT_FRAME_SIZE) {
   const [rect, setRect] = useState({ left: 0, top: 0, width: 0, height: 0, scale: 0 });
   const frame = useRef(0);
+
+  const frameW = frameSize?.width || DEFAULT_FRAME_SIZE.width;
+  const frameH = frameSize?.height || DEFAULT_FRAME_SIZE.height;
 
   const measure = useCallback(() => {
     const el = containerRef.current;
@@ -26,9 +29,9 @@ export function useVideoContentRect(containerRef) {
     if (width <= 0 || height <= 0) return;
 
     // `contain` scales to the limiting dimension.
-    const scale = Math.min(width / FRAME_W, height / FRAME_H);
-    const w = FRAME_W * scale;
-    const h = FRAME_H * scale;
+    const scale = Math.min(width / frameW, height / frameH);
+    const w = frameW * scale;
+    const h = frameH * scale;
 
     setRect((prev) => {
       const next = { left: (width - w) / 2, top: (height - h) / 2, width: w, height: h, scale };
@@ -39,7 +42,7 @@ export function useVideoContentRect(containerRef) {
         Math.abs(prev.height - next.height) < 0.5;
       return same ? prev : next;
     });
-  }, [containerRef]);
+  }, [containerRef, frameW, frameH]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -67,14 +70,17 @@ export function useVideoContentRect(containerRef) {
  * Viewport point → frame coordinate, or null when the click landed on a
  * letterbox bar (outside the picture) and therefore means nothing.
  */
-export function toFramePoint(event, canvas) {
+export function toFramePoint(event, canvas, frameSize = DEFAULT_FRAME_SIZE) {
   if (!canvas) return null;
   const box = canvas.getBoundingClientRect();
   if (box.width <= 0 || box.height <= 0) return null;
 
-  const x = Math.round(((event.clientX - box.left) / box.width) * FRAME_W);
-  const y = Math.round(((event.clientY - box.top) / box.height) * FRAME_H);
+  const frameW = frameSize?.width || DEFAULT_FRAME_SIZE.width;
+  const frameH = frameSize?.height || DEFAULT_FRAME_SIZE.height;
 
-  if (x < 0 || y < 0 || x > FRAME_W || y > FRAME_H) return null;
+  const x = Math.round(((event.clientX - box.left) / box.width) * frameW);
+  const y = Math.round(((event.clientY - box.top) / box.height) * frameH);
+
+  if (x < 0 || y < 0 || x > frameW || y > frameH) return null;
   return [x, y];
 }

@@ -82,7 +82,14 @@ export function aggregateThreat(zones) {
 
 export const threatColor = (level) => THREAT[level] || THREAT.LOW;
 
-// Video geometry the backend encodes at (detect.py resizes every frame to this).
-// The draw overlay maps clicks into this space, so it must stay in sync.
+// Fallback video geometry, used only until the first telemetry payload lands.
+//
+// The authoritative value is config.FRAME_WIDTH / FRAME_HEIGHT in the backend,
+// which publishes it as `frame_width` / `frame_height` in every payload — see
+// useSurveillance's `frameSize`. Operator-drawn zone coordinates are mapped
+// through this, so a copy drifting out of sync means zones silently guard the
+// wrong pixels; prefer the live value everywhere it is available.
 export const FRAME_W = 1280;
 export const FRAME_H = 720;
+
+export const DEFAULT_FRAME_SIZE = { width: FRAME_W, height: FRAME_H };

@@ -24,7 +24,7 @@ const WIRE_COLOR = '#d95926';
  *     into local state, so the toolbar reported zones the backend never got.
  *     Nothing is committed locally until the server accepts it.
  */
-export function DrawOverlay({ setupDone, onStart, containerRef, starting }) {
+export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameSize }) {
   const [mode, setMode] = useState('zone');
   const [points, setPoints] = useState([]);
   const [wirePoints, setWirePoints] = useState([]);
@@ -35,7 +35,12 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting }) {
   const [status, setStatus] = useState('');
 
   const canvasRef = useRef(null);
-  const rect = useVideoContentRect(containerRef);
+  // Server-authoritative, with the theme constants as the pre-connection
+  // fallback — clicks are mapped into this space, so it must match what the
+  // backend encodes or zones guard the wrong pixels.
+  const frameW = frameSize?.width || FRAME_W;
+  const frameH = frameSize?.height || FRAME_H;
+  const rect = useVideoContentRect(containerRef, frameSize);
 
   // A new detection run starts from a clean slate on the backend
   // (detect.py resets `zones = []`), so the overlay must not keep showing the
@@ -54,7 +59,7 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting }) {
     const ctx = canvas?.getContext?.('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, FRAME_W, FRAME_H);
+    ctx.clearRect(0, 0, frameW, frameH);
 
     zones.forEach((z) => {
       if (z.points.length < 2) return;
@@ -130,12 +135,12 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting }) {
         ctx.setLineDash([]);
       }
     }
-  }, [points, wirePoints, zones, wires, mode]);
+  }, [points, wirePoints, zones, wires, mode, frameW, frameH]);
 
   const handleClick = useCallback(
     (e) => {
       if (setupDone) return;
-      const point = toFramePoint(e, canvasRef.current);
+      const point = toFramePoint(e, canvasRef.current, frameSize);
       if (!point) return; // click landed on a letterbox bar
 
       if (mode === 'zone') {
@@ -151,7 +156,7 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting }) {
         });
       }
     },
-    [mode, setupDone]
+    [mode, setupDone, frameSize]
   );
 
   const saveZone = async () => {
@@ -207,8 +212,8 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting }) {
     <>
       <canvas
         ref={canvasRef}
-        width={FRAME_W}
-        height={FRAME_H}
+        width={frameW}
+        height={frameH}
         onClick={handleClick}
         aria-label={
           mode === 'zone'

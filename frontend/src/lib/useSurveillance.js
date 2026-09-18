@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { WS_URL } from './api';
-import { threatToScore } from '../theme';
+import { WS_URL, rejectToken, wsProtocols } from './api';
+import { DEFAULT_FRAME_SIZE, threatToScore } from '../theme';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Live telemetry socket.
@@ -19,7 +19,9 @@ import { threatToScore } from '../theme';
 const TELEMETRY_HZ = 5;
 const TELEMETRY_INTERVAL = 1000 / TELEMETRY_HZ;
 
-// The server never truncates its alert log, so we bound it here. Newest wins.
+// The server keeps a bounded ring of its own; this is a second bound so a
+// server that is reconfigured upward cannot grow the console's memory. Newest
+// wins.
 const MAX_ALERTS = 200;
 
 const RT_SAMPLES = 60;   // at TELEMETRY_HZ → ~12s
@@ -38,7 +40,23 @@ const EMPTY_TELEMETRY = {
   surge: false,
   modes: { loitering: true, night: true, surge: true },
   setupDone: false,
+  frameSize: DEFAULT_FRAME_SIZE,
 };
+
+/**
+ * Highest alert id in a payload, or 0.
+ *
+ * The console used to infer "a new alert arrived" from the alert array getting
+ * longer. The server's log is a fixed-size ring, so once it saturates the
+ * length never increases again and every subsequent alert went unnoticed —
+ * alert markers stopped appearing on the activity charts for the rest of the
+ * session. Ids are monotonic and survive truncation.
+ */
+export function newestAlertId(alerts) {
+  if (!Array.isArray(alerts) || !alerts.length) return 0;
+  const last = alerts[alerts.length - 1];
+  return Number.isFinite(last?.id) ? last.id : 0;
+}
 
 const EMPTY_HISTORY = { realtime: [], perSec: [], per10s: [] };
 
@@ -71,6 +89,13 @@ function mergePayload(prev, d) {
     surge: typeof d.surge === 'boolean' ? d.surge : prev.surge,
     modes: d.modes && typeof d.modes === 'object' ? { ...prev.modes, ...d.modes } : prev.modes,
     setupDone: typeof d.setup_done === 'boolean' ? d.setup_done : prev.setupDone,
+    // Frame geometry is server-authoritative: zone coordinates are expressed in
+    // it, so a hardcoded copy here would silently misplace zones if the backend
+    // ever changed resolution.
+    frameSize:
+      Number.isFinite(d.frame_width) && Number.isFinite(d.frame_height)
+        ? { width: d.frame_width, height: d.frame_height }
+        : prev.frameSize,
   };
 }
 
@@ -90,7 +115,7 @@ export function useSurveillance() {
   const tenSBucket = useRef([]);
   const lastSecFlush = useRef(0);
   const lastTenSFlush = useRef(0);
-  const prevAlertCount = useRef(0);
+  const prevAlertId = useRef(0);
   const sawFrame = useRef(false);
 
   const resetHistory = useCallback(() => {
@@ -100,7 +125,7 @@ export function useSurveillance() {
     tenSBucket.current = [];
     lastSecFlush.current = 0;
     lastTenSFlush.current = 0;
-    prevAlertCount.current = 0;
+    prevAlertId.current = 0;
     setHistory(EMPTY_HISTORY);
     setTelemetry(EMPTY_TELEMETRY);
   }, []);
@@ -126,7 +151,10 @@ export function useSurveillance() {
 
       let ws;
       try {
-        ws = new WebSocket(WS_URL);
+        // The operator token rides in the subprotocol list — the WebSocket API
+        // has no way to set headers, and the server rejects the handshake
+        // without it.
+        ws = new WebSocket(WS_URL, wsProtocols());
       } catch {
         scheduleReconnect();
         return;
@@ -165,8 +193,9 @@ export function useSurveillance() {
 
         // Sample into the history buckets at full socket rate so the 1m/5m
         // averages stay accurate even though we only commit at TELEMETRY_HZ.
-        const alerted = merged.alerts.length > prevAlertCount.current;
-        prevAlertCount.current = merged.alerts.length;
+        const newestId = newestAlertId(merged.alerts);
+        const alerted = newestId > prevAlertId.current;
+        prevAlertId.current = Math.max(prevAlertId.current, newestId);
         const sample = {
           persons: merged.persons,
           vehicles: merged.vehicles,
@@ -177,9 +206,18 @@ export function useSurveillance() {
         tenSBucket.current.push(sample);
       };
 
-      const onDown = () => {
+      const onDown = (event) => {
         if (cancelled) return;
         setConnected(false);
+
+        // 1008 (policy violation) is the server refusing the handshake: bad or
+        // missing operator token. Redialling with the same credential would
+        // loop forever, so hand it to api.js, which drops the token and
+        // re-prompts.
+        if (event?.code === 1008) {
+          rejectToken();
+          return;
+        }
         scheduleReconnect();
       };
 
