@@ -26,7 +26,7 @@ FRONTEND_BUILD_DIR = os.path.join(PROJECT_DIR, "frontend", "build")
 
 # ── Model / media ────────────────────────────────────────────────────────────
 MODEL_FILE = os.path.join(MODELS_DIR, "yolov8m.pt")
-VIDEO_FILE = os.path.join(VIDEOS_DIR, "test.mp4")
+VIDEO_FILE = os.path.join(VIDEOS_DIR, "11.mp4")
 LIVE_URL   = "https://www.youtube.com/watch?v=zMCea32gpmg"
 
 # ── Server ───────────────────────────────────────────────────────────────────
