@@ -484,6 +484,8 @@ export function Dashboard({ onBack }) {
               starting={busy === 'start'}
               containerRef={videoBoxRef}
               frameSize={telemetry.frameSize}
+              savedZones={zones}
+              savedWires={telemetry.tripwires}
             />
           </section>
 

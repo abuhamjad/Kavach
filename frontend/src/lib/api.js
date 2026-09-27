@@ -200,3 +200,5 @@ export const addTripwire = (name, p1, p2) => post('/add_tripwire', { name, p1, p
 export const startDetection = () => post('/start_detection');
 export const stopDetection = () => post('/stop_detection');
 export const setMode = (mode, value) => post('/set_mode', { mode, value });
+export const clearZones = () => post('/clear_zones');
+export const removeShape = (kind, name) => post('/remove_shape', { kind, name });

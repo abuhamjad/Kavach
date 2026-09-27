@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { addTripwire, addZone } from '../lib/api';
+import { addTripwire, addZone, clearZones, removeShape } from '../lib/api';
 import { useVideoContentRect, toFramePoint } from '../lib/useVideoContentRect';
 import { BRAND, FONT, FRAME_H, FRAME_W, INK, SURFACE } from '../theme';
 import { Ic } from './Icons';
@@ -24,12 +24,17 @@ const WIRE_COLOR = '#d95926';
  *     into local state, so the toolbar reported zones the backend never got.
  *     Nothing is committed locally until the server accepts it.
  */
-export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameSize }) {
+export function DrawOverlay({
+  setupDone, onStart, containerRef, starting, frameSize, savedZones = [], savedWires = [],
+}) {
   const [mode, setMode] = useState('zone');
   const [points, setPoints] = useState([]);
   const [wirePoints, setWirePoints] = useState([]);
-  const [zones, setZones] = useState([]);
-  const [wires, setWires] = useState([]);
+  // Saved shapes come from the server's telemetry, not local state: a local
+  // copy was lost on reload while the server kept the zones, leaving UNDO and
+  // CLEAR with nothing to act on.
+  const zones = savedZones.filter((z) => Array.isArray(z.points));
+  const wires = savedWires;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState('');
@@ -42,17 +47,54 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameS
   const frameH = frameSize?.height || FRAME_H;
   const rect = useVideoContentRect(containerRef, frameSize);
 
-  // A new detection run starts from a clean slate on the backend
-  // (detect.py resets `zones = []`), so the overlay must not keep showing the
-  // previous run's shapes.
+  // Saved zones and wires survive HALT on the backend, so they stay listed
+  // here too; only unsaved drafts are dropped when a run starts. WIPE is the
+  // way to start over.
   useEffect(() => {
     if (!setupDone) return;
     setPoints([]);
     setWirePoints([]);
-    setZones([]);
-    setWires([]);
     setError(null);
   }, [setupDone]);
+
+  // UNDO: drop the last draft point; with no draft open, delete the last saved
+  // shape of the current mode on the server.
+  const draft = mode === 'zone' ? points : wirePoints;
+  const saved = mode === 'zone' ? zones : wires;
+  const canUndo = !saving && (draft.length > 0 || saved.length > 0);
+
+  const undo = async () => {
+    if (draft.length) {
+      (mode === 'zone' ? setPoints : setWirePoints)((p) => p.slice(0, -1));
+      return;
+    }
+    const last = saved[saved.length - 1];
+    if (!last) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await removeShape(mode === 'zone' ? 'zone' : 'tripwire', last.name);
+      setStatus(`${last.name} deleted`);
+    } catch (err) {
+      setError(`Could not delete ${last.name}: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const wipe = async () => {
+    if (saving || !window.confirm('Remove every zone and tripwire?')) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await clearZones();
+      setStatus('All zones and tripwires removed');
+    } catch (err) {
+      setError(`Could not clear zones: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -166,7 +208,6 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameS
     setError(null);
     try {
       await addZone(name, points);
-      setZones((prev) => [...prev, { name, points }]);
       setPoints([]);
       setStatus(`${name} saved with ${points.length} points`);
     } catch (err) {
@@ -184,7 +225,6 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameS
     setError(null);
     try {
       await addTripwire(name, wirePoints[0], wirePoints[1]);
-      setWires((prev) => [...prev, { name, p1: wirePoints[0], p2: wirePoints[1] }]);
       setWirePoints([]);
       setStatus(`${name} saved`);
     } catch (err) {
@@ -207,6 +247,9 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameS
     cursor: 'pointer',
   };
   const ghost = { ...btn, borderColor: INK.line, color: INK.muted };
+  // Disabled buttons must look it: they used to render identically to live
+  // ones, so a no-op UNDO read as a stuck button.
+  const ghostIf = (enabled) => (enabled ? ghost : { ...ghost, opacity: 0.35, cursor: 'not-allowed' });
 
   return (
     <>
@@ -327,10 +370,11 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameS
             >
               {saving ? 'SAVING…' : `SAVE ZONE (${points.length} PTS)`}
             </button>
-            <button type="button" onClick={() => setPoints((p) => p.slice(0, -1))} disabled={!points.length} style={ghost}>
+            <button type="button" onClick={undo} disabled={!canUndo} style={ghostIf(canUndo)}
+                    title={points.length ? 'Remove the last point' : 'Delete the last saved zone'}>
               UNDO
             </button>
-            <button type="button" onClick={() => setPoints([])} disabled={!points.length} style={ghost}>
+            <button type="button" onClick={() => setPoints([])} disabled={!points.length} style={ghostIf(points.length > 0)}>
               CLEAR
             </button>
           </>
@@ -350,7 +394,11 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameS
             >
               {saving ? 'SAVING…' : `SAVE WIRE (${wirePoints.length}/2)`}
             </button>
-            <button type="button" onClick={() => setWirePoints([])} disabled={!wirePoints.length} style={ghost}>
+            <button type="button" onClick={undo} disabled={!canUndo} style={ghostIf(canUndo)}
+                    title={wirePoints.length ? 'Remove the last point' : 'Delete the last saved wire'}>
+              UNDO
+            </button>
+            <button type="button" onClick={() => setWirePoints([])} disabled={!wirePoints.length} style={ghostIf(wirePoints.length > 0)}>
               CLEAR
             </button>
           </>
@@ -359,6 +407,12 @@ export function DrawOverlay({ setupDone, onStart, containerRef, starting, frameS
         <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: '0.6rem', color: INK.muted, letterSpacing: '0.1em' }}>
           {zones.length} ZONES · {wires.length} WIRES
         </span>
+
+        {(zones.length > 0 || wires.length > 0) && (
+          <button type="button" onClick={wipe} disabled={saving} style={ghost}>
+            WIPE ALL
+          </button>
+        )}
 
         <button
           type="button"

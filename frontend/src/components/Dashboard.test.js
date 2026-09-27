@@ -40,7 +40,6 @@ class MockSocket {
 }
 
 const frameOf = (state) => ({
-  frame: 'AAAA',
   alerts: [],
   zones: [],
   total_persons: 0,
@@ -183,4 +182,48 @@ test('detection modules are exposed as real switches', async () => {
   const switches = screen.getAllByRole('switch');
   expect(switches).toHaveLength(3);
   switches.forEach((s) => expect(s).toHaveAttribute('aria-checked'));
+});
+
+test('binary messages are video frames, shown via object URLs that are recycled', async () => {
+  let n = 0;
+  URL.createObjectURL = jest.fn(() => `blob:frame-${++n}`);
+  URL.revokeObjectURL = jest.fn();
+
+  render(<Dashboard onBack={() => {}} />);
+  act(() => MockSocket.last.open());
+
+  act(() => MockSocket.last.onmessage({ data: new Blob(['jpeg-1']) }));
+  act(() => MockSocket.last.onmessage({ data: new Blob(['jpeg-2']) }));
+
+  expect(screen.getByAltText('Live detection feed').getAttribute('src')).toBe('blob:frame-2');
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:frame-1'); // no leak per frame
+});
+
+test('after a reload, UNDO deletes the last zone the server still holds', async () => {
+  render(<Dashboard onBack={() => {}} />);
+  act(() => MockSocket.last.open());
+  // A fresh page: nothing drawn locally, but the server kept SECTOR-A.
+  act(() =>
+    MockSocket.last.emit(
+      frameOf({
+        setup_done: false,
+        zones: [{ name: 'SECTOR-A', threat: 'LOW', persons: 0, vehicles: 0, points: [[0, 0], [90, 0], [90, 90]] }],
+        tripwires: [],
+      })
+    )
+  );
+  await flush();
+
+  expect(screen.getByText(/1 ZONES · 0 WIRES/)).toBeInTheDocument();
+  const undo = screen.getByRole('button', { name: 'UNDO' });
+  expect(undo).toBeEnabled();
+  // CLEAR only discards unsaved points, and there are none — and it must look it.
+  expect(screen.getByRole('button', { name: 'CLEAR' })).toBeDisabled();
+
+  await act(async () => {
+    undo.click();
+  });
+  const [url, init] = global.fetch.mock.calls.find(([u]) => u.endsWith('/remove_shape'));
+  expect(url).toMatch(/\/remove_shape$/);
+  expect(JSON.parse(init.body)).toEqual({ kind: 'zone', name: 'SECTOR-A' });
 });

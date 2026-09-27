@@ -8,7 +8,14 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
 
-const HTML = fs.readFileSync(path.join(__dirname, '../../backend/web/mobile.html'), 'utf8');
+// The page loads /mobile.css and /mobile.js from the server; jsdom has no
+// server, so inline both — same bytes the browser would execute.
+const WEB = path.join(__dirname, '../../backend/web');
+const read = (f) => fs.readFileSync(path.join(WEB, f), 'utf8');
+const HTML = read('mobile.html')
+  .replace('<link rel="stylesheet" href="/mobile.css">', () => `<style>${read('mobile.css')}</style>`)
+  .replace('<script src="/mobile.js"></script>', () => `<script>${read('mobile.js')}</script>`);
+if (HTML.includes('src="/mobile.js"')) throw new Error('mobile.js was not inlined');
 
 const PAYLOADS = [
   '<img src=x onerror="window.__PWNED=1">',
@@ -116,10 +123,14 @@ async function main() {
   // The token travels in the subprotocol header, never the URL.
   const [socket] = sockets;
   if (socket.url.includes(TOKEN)) fail('token leaked into the WebSocket URL');
-  if (!socket.protocols || socket.protocols[1] !== `kavach-token.${TOKEN}`) {
+  if (!socket.protocols || !socket.protocols.includes(`kavach-token.${TOKEN}`)) {
     fail('socket did not offer the operator token as a subprotocol');
   }
-  console.log('valid token accepted · socket opened with token in subprotocol');
+  // This page shows no video; it must opt out rather than be sent every frame.
+  if (!socket.protocols.includes('kavach.telemetry-only')) {
+    fail('socket did not opt out of video frames');
+  }
+  console.log('valid token accepted · token in subprotocol · video frames opted out');
 
   // ── XSS ───────────────────────────────────────────────────────────────────
   PAYLOADS.forEach((payload, i) => {

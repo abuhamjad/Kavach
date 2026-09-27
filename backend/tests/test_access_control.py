@@ -39,6 +39,8 @@ STATE_CHANGING = [
     ("/start_detection", None),
     ("/stop_detection", None),
     ("/set_mode", {"mode": "night", "value": True}),
+    ("/clear_zones", None),
+    ("/remove_shape", {"kind": "zone", "name": "gate"}),
 ]
 
 
@@ -180,6 +182,36 @@ class TestTelemetrySocket(AccessControlTestCase):
             origin=ALLOWED_ORIGIN,
         ) as ws:
             self.assertIsNotNone(ws)
+
+
+class TestBuildAssets(AccessControlTestCase):
+    """Root-level build files are served; nothing outside the build is."""
+
+    def setUp(self):
+        super().setUp()
+        import tempfile
+        self.build = tempfile.mkdtemp()
+        with open(os.path.join(self.build, "manifest.json"), "w") as f:
+            f.write('{"name": "kavach"}')
+        with open(os.path.join(os.path.dirname(self.build), "secret.txt"), "w") as f:
+            f.write("outside the build")
+        self._orig, server.STATIC_PATH = server.STATIC_PATH, self.build
+
+    def tearDown(self):
+        server.STATIC_PATH = self._orig
+
+    def test_manifest_is_served_from_the_build_root(self):
+        r = self.client.get("/manifest.json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json(), {"name": "kavach"})
+
+    def test_a_missing_asset_is_404_not_index_html(self):
+        self.assertEqual(self.client.get("/nope.js").status_code, 404)
+
+    def test_traversal_out_of_the_build_is_refused(self):
+        for path in ("/../secret.txt", "/%2e%2e/secret.txt", "/..%2fsecret.txt"):
+            r = self.client.get(path)
+            self.assertNotEqual(r.text, "outside the build", path)
 
 
 class TestTokenConfiguration(unittest.TestCase):

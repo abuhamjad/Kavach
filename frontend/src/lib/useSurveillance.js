@@ -5,12 +5,12 @@ import { DEFAULT_FRAME_SIZE, threatToScore } from '../theme';
 // ─────────────────────────────────────────────────────────────────────────────
 //  Live telemetry socket.
 //
-//  The backend pushes its ENTIRE shared_state every 50ms (~20Hz) — a base64
-//  JPEG plus the full, uncapped alert log. Committing that to React state at
-//  20Hz re-renders the whole console (charts included) twenty times a second,
-//  so this hook splits the stream in two:
+//  The backend streams video at up to DISPLAY_FPS (~25-30Hz) as binary JPEG
+//  messages, and telemetry as JSON text whenever it changes. Committing either
+//  to React state at that rate would re-render the whole console (charts
+//  included) thirty times a second, so this hook keeps them apart:
 //
-//    • Video frames  → written straight to the <img> via videoRef. Zero renders.
+//    • Video frames  → object URL written straight to the <img>. Zero renders.
 //    • Telemetry     → coalesced in a ref, committed at TELEMETRY_HZ.
 //
 //  Frames stay smooth; React only does work at a rate a human can read.
@@ -34,6 +34,7 @@ const RECONNECT_MAX_MS = 15000;
 const EMPTY_TELEMETRY = {
   alerts: [],
   zones: [],
+  tripwires: [],
   persons: 0,
   vehicles: 0,
   night: false,
@@ -83,6 +84,7 @@ function mergePayload(prev, d) {
   return {
     alerts: Array.isArray(d.alerts) ? d.alerts.slice(-MAX_ALERTS) : prev.alerts,
     zones: Array.isArray(d.zones) ? d.zones : prev.zones,
+    tripwires: Array.isArray(d.tripwires) ? d.tripwires : prev.tripwires,
     persons: Number.isFinite(d.total_persons) ? d.total_persons : prev.persons,
     vehicles: Number.isFinite(d.total_vehicles) ? d.total_vehicles : prev.vehicles,
     night: typeof d.night === 'boolean' ? d.night : prev.night,
@@ -117,6 +119,7 @@ export function useSurveillance() {
   const lastTenSFlush = useRef(0);
   const prevAlertId = useRef(0);
   const sawFrame = useRef(false);
+  const frameUrl = useRef(null); // current object URL, revoked when replaced
 
   const resetHistory = useCallback(() => {
     pending.current = null;
@@ -170,22 +173,28 @@ export function useSurveillance() {
       ws.onmessage = (event) => {
         if (cancelled) return;
 
-        let d;
-        try {
-          d = JSON.parse(event.data);
-        } catch {
-          return; // Drop the bad frame; keep the stream alive.
-        }
-        if (!d || typeof d !== 'object') return;
-
-        // Frames go straight to the DOM node — no setState, no re-render.
-        if (typeof d.frame === 'string' && d.frame && videoRef.current) {
-          videoRef.current.src = `data:image/jpeg;base64,${d.frame}`;
+        // Video arrives as binary JPEG messages, telemetry as JSON text. Frames
+        // go straight to the DOM node — no setState, no re-render.
+        if (typeof event.data !== 'string') {
+          if (!videoRef.current) return;
+          const url = URL.createObjectURL(event.data);
+          videoRef.current.src = url;
+          if (frameUrl.current) URL.revokeObjectURL(frameUrl.current);
+          frameUrl.current = url;
           if (!sawFrame.current) {
             sawFrame.current = true;
             setHasFrame(true);
           }
+          return;
         }
+
+        let d;
+        try {
+          d = JSON.parse(event.data);
+        } catch {
+          return; // Drop the bad message; keep the stream alive.
+        }
+        if (!d || typeof d !== 'object') return;
 
         const merged = mergePayload(latest.current, d);
         latest.current = merged;
@@ -282,6 +291,10 @@ export function useSurveillance() {
       cancelled = true;
       clearInterval(commit);
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (frameUrl.current) {
+        URL.revokeObjectURL(frameUrl.current);
+        frameUrl.current = null;
+      }
       if (socket) {
         // Detach before closing: onclose must not re-dial after unmount.
         socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;

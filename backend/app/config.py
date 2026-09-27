@@ -65,6 +65,7 @@ AUTH_TOKEN_IS_EPHEMERAL = _env_token is None
 # the token rides in Sec-WebSocket-Protocol — the standard workaround.
 WS_PROTOCOL = "kavach.v1"
 WS_TOKEN_PREFIX = "kavach-token."
+WS_TELEMETRY_ONLY = "kavach.telemetry-only"   # offered by clients that show no video
 
 
 def local_ip():
@@ -115,8 +116,16 @@ FRAME_WIDTH  = 1280
 FRAME_HEIGHT = 720
 
 # ── Detection tuning ─────────────────────────────────────────────────────────
-DETECT_EVERY_N_FRAMES = 2   # run YOLO every N frames (higher = faster, less smooth)
-PUSH_EVERY_N_FRAMES   = 3   # push a frame to the dashboard every N frames
+DISPLAY_FPS = 25            # dashboard frame-rate cap; YOLO runs beside it, not in its path
+
+# YOLO input size (multiple of 32). The biggest speed lever on CPU: 640 finds the
+# smallest, farthest objects; 480 is ~40% faster and loses only tiny ones.
+DETECT_IMGSZ = 480
+
+# Boxes are drawn where each track is predicted to be *now*, from its measured
+# velocity, rather than where it was when the (slower) detector last saw it.
+# Capped so a track that vanished is not flung across the screen.
+MAX_EXTRAPOLATE_FRAMES = 15
 
 LOITER_SECONDS   = 5        # dwell in a zone before it counts as loitering
 SURGE_WINDOW     = 90       # rolling frame window for surge comparison

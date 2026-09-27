@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import secrets
-import threading
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -24,79 +23,12 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-# ── Shared state ─────────────────────────────────────────────────────────────
-#
-# Two threads touch what follows: the detection loop writes it, and the asyncio
-# event loop serialises it for every connected socket. `state_lock` guards both
-# structures — it used to be declared here and never taken, so a reader could
-# (and occasionally did) serialise a half-written frame.
-#
-# The accessors below are the supported way in. Reach for shared_state directly
-# and you are back to the unsynchronised version. Writers always *replace* the
-# nested lists rather than mutating them in place, which is what makes the
-# shallow copy in snapshot_state() safe.
-
-state_lock = threading.RLock()
-
-shared_state = {
-    "frame":          None,
-    "alerts":         [],
-    "zones":          [],
-    "total_persons":  0,
-    "total_vehicles": 0,
-    "night":          False,
-    "surge":          False,
-    "modes":          {'loitering': True, 'night': True, 'surge': True},
-    "setup_done":     False,
-    "frame_width":    config.FRAME_WIDTH,
-    "frame_height":   config.FRAME_HEIGHT,
-}
-pending_commands = []
-
-# Bumped on every write. The socket compares it instead of re-sending an
-# unchanged payload — an idle system was pushing a full base64 JPEG to every
-# client twenty times a second.
-_state_version = 0
-
-
-def update_state(**fields):
-    """Publish new telemetry. The only supported writer."""
-    global _state_version
-    with state_lock:
-        shared_state.update(fields)
-        _state_version += 1
-
-
-def snapshot_state():
-    """A consistent copy of the state, plus its version."""
-    with state_lock:
-        return dict(shared_state), _state_version
-
-
-def get_setup_done():
-    with state_lock:
-        return shared_state["setup_done"]
-
-
-def queue_command(command):
-    """Enqueue work for the detection loop, dropping the oldest if it stalls.
-
-    The loop drains this list; if it wedges, an unbounded queue is a memory leak
-    an unauthenticated caller could once drive. Newest wins — a stale command is
-    worth less than the current one.
-    """
-    with state_lock:
-        pending_commands.append(command)
-        while len(pending_commands) > config.MAX_PENDING_COMMANDS:
-            pending_commands.pop(0)
-
-
-def take_commands():
-    """Atomically drain the queue. Returns the commands in arrival order."""
-    with state_lock:
-        drained = pending_commands[:]
-        del pending_commands[:]
-        return drained
+# Shared state and the command queue live in app.bus; re-exported here because
+# they are part of this module's surface (tests and callers use them).
+from app.bus import (  # noqa: E402,F401
+    get_setup_done, pending_commands, queue_command, shared_state,
+    snapshot_state, take_commands, update_state,
+)
 
 
 # ── Authentication ───────────────────────────────────────────────────────────
@@ -184,6 +116,22 @@ def set_mode(data: ModeData):
     queue_command({'type': 'set_mode', 'mode': data.mode, 'value': data.value})
     return {"status": "ok"}
 
+class ShapeRef(StrictModel):
+    kind: Literal["zone", "tripwire"]
+    name: Name
+
+@app.post("/remove_shape", dependencies=OPERATOR)
+def remove_shape(ref: ShapeRef):
+    """Delete one saved zone or tripwire — what UNDO does with no draft open."""
+    queue_command({'type': 'remove_shape', 'kind': ref.kind, 'name': ref.name})
+    return {"status": "ok"}
+
+@app.post("/clear_zones", dependencies=OPERATOR)
+def clear_zones():
+    """Zones survive HALT, so this is how an operator starts over."""
+    queue_command({'type': 'clear_zones'})
+    return {"status": "ok"}
+
 @app.post("/auth/check", dependencies=OPERATOR)
 def auth_check():
     """Lets a console validate a token before storing it. No side effects."""
@@ -219,17 +167,31 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept(
         subprotocol=config.WS_PROTOCOL if config.WS_PROTOCOL in offered else None
     )
+    # The mobile console shows telemetry only; it opts out of video frames
+    # rather than being sent ~30 JPEGs a second it would throw away.
+    wants_frames = config.WS_TELEMETRY_ONLY not in offered
+
     try:
-        last_sent = None
+        last_version, last_frame, last_telemetry = None, None, None
         while True:
-            await asyncio.sleep(0.05)
+            # Poll faster than DISPLAY_FPS so the cap, not this loop, sets the
+            # rate. Cheap: nothing is sent unless something changed.
+            await asyncio.sleep(0.02)
             state, version = snapshot_state()
-            # Only send what the client has not already got. Without this an
-            # idle system pushed a full base64 JPEG at 20Hz to every viewer.
-            if version == last_sent or not state["frame"]:
+            frame = state.pop("frame")
+            if version == last_version or not frame:
                 continue
-            last_sent = version
-            await websocket.send_text(json.dumps(state))
+            last_version = version
+
+            # Telemetry as JSON text, only when it differs from the last send;
+            # the frame as a raw binary JPEG, only when it is a new one.
+            telemetry = json.dumps(state)
+            if telemetry != last_telemetry:
+                await websocket.send_text(telemetry)
+                last_telemetry = telemetry
+            if wants_frames and frame is not last_frame:
+                await websocket.send_bytes(frame)
+                last_frame = frame
     except WebSocketDisconnect:
         pass
 
@@ -241,6 +203,14 @@ def serve_mobile():
     if os.path.exists(MOBILE_PATH):
         return FileResponse(MOBILE_PATH)
     return HTMLResponse("<h1>mobile.html not found. Expected it at backend/web/mobile.html</h1>")
+
+@app.get("/mobile.css")
+def serve_mobile_css():
+    return FileResponse(os.path.join(config.WEB_DIR, "mobile.css"), media_type="text/css")
+
+@app.get("/mobile.js")
+def serve_mobile_js():
+    return FileResponse(os.path.join(config.WEB_DIR, "mobile.js"), media_type="text/javascript")
 
 # ── Static (React dashboard) ─────────────────────────────────────────────────
 STATIC_PATH = config.STATIC_DIR
@@ -258,7 +228,7 @@ if os.path.isdir(_STATIC_ASSETS):
 # looked like a success.
 API_PATHS = {
     "/add_zone", "/add_tripwire", "/start_detection",
-    "/stop_detection", "/set_mode", "/auth/check", "/ws",
+    "/stop_detection", "/set_mode", "/clear_zones", "/remove_shape", "/auth/check", "/ws",
 }
 
 
@@ -286,9 +256,15 @@ def catch_all(full_path: str):
         raise HTTPException(status_code=405, detail="Method not allowed on this endpoint")
 
     # Anything with an extension is an asset request, not a client-side route.
-    # Handing it index.html yields HTML served as a .js/.css/.png, which fails
-    # confusingly far from the cause.
+    # Build-root assets (manifest.json, favicon.ico, logos, robots.txt) are
+    # served from the build; anything else 404s rather than getting index.html,
+    # which would be HTML served as a .js/.css/.png and fail far from the cause.
     if os.path.splitext(full_path)[1]:
+        root = os.path.realpath(STATIC_PATH)
+        asset = os.path.realpath(os.path.join(root, full_path))
+        # realpath + prefix check: no `../` escape out of the build directory.
+        if asset.startswith(root + os.sep) and os.path.isfile(asset):
+            return FileResponse(asset)
         raise HTTPException(status_code=404, detail="Not found")
 
     return _serve_index()
