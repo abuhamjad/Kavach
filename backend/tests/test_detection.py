@@ -74,6 +74,12 @@ class TestZigzag(unittest.TestCase):
         path = [(100 + (i % 2), 100) for i in range(20)]
         self.assertFalse(geometry.detect_zigzag(path))
 
+    def test_parked_object_box_wobble_is_not_zigzag(self):
+        # YOLO boxes on a still object shift a few px each inference.
+        wobble = [(0, 0), (6, 4), (-5, 3), (4, -6), (-6, -3), (5, 5), (-4, 6)]
+        path = [(400 + dx, 300 + dy) for dx, dy in wobble * 3]
+        self.assertFalse(geometry.detect_zigzag(path))
+
     def test_threshold_is_honoured(self):
         path = [(i * 20, 100 + (40 if i % 2 else -40)) for i in range(12)]
         self.assertFalse(geometry.detect_zigzag(path, threshold=999))

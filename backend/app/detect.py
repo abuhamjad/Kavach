@@ -115,12 +115,12 @@ def analyse_frame(frame, results, state, frame_count):
             # Every containing zone, not just the first. The loop used to break
             # on the first match, so an object standing in overlapping zones was
             # counted in exactly one of them.
-            in_any_zone = False
+            in_zones = []
             for zone in state.zones:
                 # Partial overlap counts: any part of the box inside the zone.
                 if not box_touches_zone(box, zone['points']):
                     continue
-                in_any_zone = True
+                in_zones.append(zone['name'])
                 if is_person: zone['persons'] += 1
                 else:         zone['vehicles'] += 1
 
@@ -135,22 +135,38 @@ def analyse_frame(frame, results, state, frame_count):
                             state.add_alert(f"Loitering in {zone['name']}! ID:{track_id}")
                             state.loiter_alerted.add(key)
 
+            name = f"{'person' if is_person else 'vehicle'}#{track_id}"
+            watchlisted = False
+            if not is_person:
+                record, newly_flagged = state.vehicles.observe(
+                    track_id, cls, frame, box, velocity, frame_count, in_zones)
+                profile = record['profile']
+                if profile:
+                    name = profile['plate']
+                    watchlisted = profile['level'] == 'alert'
+                if newly_flagged:
+                    state.add_alert(f"WATCHLIST HIT: {profile['plate']} "
+                                    f"({profile['make']}) — {profile['reason']}")
+
             is_suspicious = track_id in state.suspicious_ids
             is_loitering  = track_id in state.loitering_ids
-            if is_suspicious:
-                box_color, tag = (0, 0, 255), " SUSPICIOUS!"
+            if watchlisted:
+                box_color, tag = (0, 0, 255), " WATCHLIST"
+            elif is_suspicious:
+                box_color, tag = (0, 0, 255), " EVASIVE"
             elif is_loitering:
-                box_color, tag = (0, 0, 255), " LOITER!"
-            elif in_any_zone:
+                box_color, tag = (0, 0, 255), " LOITER"
+            elif in_zones:
                 box_color, tag = (0, 165, 255), ""
             else:
                 box_color = (0, 255, 0) if is_person else (255, 255, 0)
                 tag = ""
 
             overlay.append({
-                'box': (x1, y1, x2, y2), 'color': box_color,
-                'label': f"{'person' if is_person else 'vehicle'}#{track_id}{tag}",
+                'id': track_id, 'box': (x1, y1, x2, y2), 'color': box_color,
+                'label': f"{name}{tag}",
                 'trail': list(trail),
+                'flagged': is_suspicious or is_loitering,
                 'trail_color': (0, 0, 255) if is_suspicious else (100, 100, 255),
                 'arrow': (prev_position, (cx, cy)) if prev_position is not None else None,
                 'arrow_color': (0, 0, 255) if is_suspicious else (0, 255, 255),
@@ -166,6 +182,7 @@ def analyse_frame(frame, results, state, frame_count):
     state.total_persons = total_persons
     state.total_vehicles = total_vehicles
     state.overlay = overlay
+    state.vehicle_log = state.vehicles.summaries(frame_count)
 
     # Surge: each zone against its own past, the site against the site's past.
     # Compare before appending, so `current` is never compared with itself.
@@ -229,12 +246,21 @@ class Detector(threading.Thread):
                 self._pending = None
             try:
                 results = self.model.track(frame, verbose=False, conf=0.3,
-                                           imgsz=config.DETECT_IMGSZ,
+                                           imgsz=inference_imgsz(),
                                            classes=ALLOWED_CLASSES, persist=True)
                 with self.lock:
                     analyse_frame(frame, results, self.state, frame_count)
             except Exception as exc:   # one bad frame must not kill detection for the session
                 print(f"Detection error on frame {frame_count}: {type(exc).__name__}: {exc}")
+
+
+def gpu_available():
+    import torch
+    return torch.cuda.is_available()
+
+
+def inference_imgsz():
+    return config.DETECT_IMGSZ if gpu_available() else config.DETECT_IMGSZ_CPU
 
 
 def load_model():
@@ -244,7 +270,11 @@ def load_model():
     # cores). Measured: raising it to all-but-two halved detections/sec, as
     # inference then fights video decode/encode for the same cores.
     model = YOLO(config.MODEL_FILE)
-    print("Model loaded.")
+    if gpu_available():
+        import torch
+        print(f"Model loaded on GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        print("Model loaded on CPU — no CUDA GPU found; detection will lag moving objects.")
     return model
 
 
@@ -259,7 +289,7 @@ def _publish_reset(state):
     state.reset(keep_zones=True)
     bus.update_state(
         frame=None, alerts=[], zones=[],
-        total_persons=0, total_vehicles=0,
+        total_persons=0, total_vehicles=0, vehicle_log=[],
         night=False, surge=False, setup_done=False,
     )
     print("Detection reset.")
@@ -360,6 +390,7 @@ def run(model=None, stop_event=None):
             src_fps = cap.get(cv2.CAP_PROP_FPS)
             if not 1 <= src_fps <= 120:
                 src_fps = 25.0
+            state.vehicles.fps = src_fps
             publish_every = max(1, round(src_fps / config.DISPLAY_FPS))
             next_due = time.monotonic()
 

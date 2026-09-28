@@ -171,7 +171,7 @@ pip install -r requirements.txt
 > [!TIP]
 > **For CUDA acceleration**, install PyTorch from its own index *before* the requirements file:
 > ```bash
-> pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu124
+> pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
 > pip install -r requirements.txt
 > ```
 

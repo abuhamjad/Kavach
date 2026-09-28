@@ -22,6 +22,7 @@ shared_state = {
     "tripwires":      [],
     "total_persons":  0,
     "total_vehicles": 0,
+    "vehicle_log":    [],
     "night":          False,
     "surge":          False,
     "modes":          {'loitering': True, 'night': True, 'surge': True},

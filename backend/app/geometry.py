@@ -87,23 +87,28 @@ def get_threat_level(person_count, vehicle_count, has_loiterer, night, surge):
     else:            return "LOW",    (0, 255, 0)
 
 
-def detect_zigzag(positions, threshold=config.ZIGZAG_THRESHOLD):
+def detect_zigzag(positions, threshold=config.ZIGZAG_THRESHOLD,
+                  min_step=config.ZIGZAG_MIN_STEP, min_turn=config.ZIGZAG_MIN_TURN):
     positions = list(positions)
     if len(positions) < 6:
         return False
+    # Steps are measured from the last point that moved at least min_step away,
+    # so YOLO box jitter on a slow or parked object never registers as a turn.
     direction_changes = 0
     prev_angle = None
-    for i in range(1, len(positions)):
-        dx = positions[i][0] - positions[i-1][0]
-        dy = positions[i][1] - positions[i-1][1]
-        if np.sqrt(dx**2 + dy**2) < 2:
+    anchor = positions[0]
+    for point in positions[1:]:
+        dx = point[0] - anchor[0]
+        dy = point[1] - anchor[1]
+        if np.hypot(dx, dy) < min_step:
             continue
         angle = np.degrees(np.arctan2(dy, dx))
         if prev_angle is not None:
             diff = abs(angle - prev_angle)
             if diff > 180: diff = 360 - diff
-            if diff > 45:  direction_changes += 1
+            if diff > min_turn: direction_changes += 1
         prev_angle = angle
+        anchor = point
     return direction_changes >= threshold
 
 

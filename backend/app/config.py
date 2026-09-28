@@ -26,8 +26,8 @@ FRONTEND_BUILD_DIR = os.path.join(PROJECT_DIR, "frontend", "build")
 
 # ── Model / media ────────────────────────────────────────────────────────────
 MODEL_FILE = os.path.join(MODELS_DIR, "yolov8m.pt")
-VIDEO_FILE = os.path.join(VIDEOS_DIR, "Vehicle-and-Surge-Detection.mp4")
-# VIDEO_FILE = os.path.join(VIDEOS_DIR, "Person-Detection.mp4")
+VIDEO_FILE = os.path.join(VIDEOS_DIR, "Vehicle and Surge Detection.mp4")
+# VIDEO_FILE = os.path.join(VIDEOS_DIR, "Person Detection.mp4")
 LIVE_URL   = "https://www.youtube.com/watch?v=zMCea32gpmg"
 
 # ── Server ───────────────────────────────────────────────────────────────────
@@ -118,20 +118,31 @@ FRAME_HEIGHT = 720
 # ── Detection tuning ─────────────────────────────────────────────────────────
 DISPLAY_FPS = 25            # dashboard frame-rate cap; YOLO runs beside it, not in its path
 
-# YOLO input size (multiple of 32). The biggest speed lever on CPU: 640 finds the
-# smallest, farthest objects; 480 is ~40% faster and loses only tiny ones.
-DETECT_IMGSZ = 480
+# YOLO input size (multiple of 32). 640 finds the smallest, farthest objects and
+# separates people walking in a group; on CPU, 480 is ~40% faster and loses only
+# tiny ones. The CPU size is used automatically when no CUDA GPU is available.
+DETECT_IMGSZ     = 640
+DETECT_IMGSZ_CPU = 480
 
 # Boxes are drawn where each track is predicted to be *now*, from its measured
 # velocity, rather than where it was when the (slower) detector last saw it.
 # Capped so a track that vanished is not flung across the screen.
 MAX_EXTRAPOLATE_FRAMES = 15
 
+# When a new detection corrects a box's position, this fraction of the
+# correction is applied per displayed frame, so boxes glide instead of snapping.
+# Steady motion is followed exactly; only the correction is eased.
+BOX_SMOOTHING = 0.5
+
 LOITER_SECONDS   = 5        # dwell in a zone before it counts as loitering
 SURGE_WINDOW     = 90       # rolling frame window for surge comparison
 SURGE_THRESHOLD  = 5        # person-count rise across the window that trips a surge
 PATH_HISTORY_LEN = 20       # trail length kept per tracked object
 ZIGZAG_THRESHOLD = 4        # direction changes before movement reads as evasive
+ZIGZAG_MIN_STEP  = 15       # px a track must move before a step counts (filters box jitter)
+ZIGZAG_MIN_TURN  = 90       # degrees a step must turn to count as a direction change
+TRAIL_DRAW_LEN   = 10       # most recent trail points drawn for a flagged track
+ARROW_MIN_MOVE   = 8        # px between detections before a heading arrow is drawn
 
 # A threat level must hold for this many consecutive evaluations before it is
 # committed and alerted on. Without it, a count sitting on a threshold boundary
@@ -145,6 +156,15 @@ TRACK_EVICT_AFTER_FRAMES = 300
 TRACK_EVICT_EVERY_FRAMES = 120
 
 MAX_ALERTS = 200            # alert_log ring size; the console renders up to this
+
+# ── Vehicle intelligence (demo: plate/registration data is simulated) ────────
+PLATE_READ_DETECTIONS  = 4    # detections of a vehicle before its plate "reads"
+DEMO_WATCHLIST_AT      = 4    # plates read before the first watchlist hit
+DEMO_WATCHLIST_GAP_SECONDS = 75   # minimum time between watchlist hits
+WATCHLIST_MIN_BOX_H    = 110  # px; hits only land on clearly visible vehicles
+VEHICLE_REASSOC_FRAMES = 60   # a vehicle lost this recently can be re-claimed
+VEHICLE_LOG_MAX        = 150  # vehicles kept in the console's log
+VEHICLE_IN_VIEW_FRAMES = 20   # unseen longer than this = left the frame
 
 SOURCE_RETRY_SECONDS = 5    # wait before retrying when no video source opens
 

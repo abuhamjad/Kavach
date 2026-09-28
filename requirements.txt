@@ -19,7 +19,8 @@ numpy==2.4.3
 # NOTE: torch/torchvision are pulled in by ultralytics, but are pinned here so
 # the build is reproducible. For CUDA builds install them FIRST from the
 # PyTorch index, then run this file:
-#   pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu124
+#   pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
+# (cu128 or newer is required for RTX 50-series GPUs.)
 torch==2.10.0
 torchvision==0.25.0
 

@@ -17,12 +17,27 @@ def draw_direction_arrow(frame, prev_pos, curr_pos, color=(0, 255, 255)):
     dx = curr_pos[0] - prev_pos[0]
     dy = curr_pos[1] - prev_pos[1]
     dist = np.sqrt(dx**2 + dy**2)
-    if dist < 3:
+    if dist < config.ARROW_MIN_MOVE:
         return
-    scale = min(dist * 1.5, 40)
+    scale = min(dist * 1.5, 30)
     end_x = int(curr_pos[0] + (dx / dist) * scale)
     end_y = int(curr_pos[1] + (dy / dist) * scale)
     cv2.arrowedLine(frame, curr_pos, (end_x, end_y), color, 2, tipLength=0.4)
+
+
+def draw_label(frame, text, x, y, color):
+    """Text on a filled chip, kept inside the frame so edge boxes stay legible."""
+    font, scale, thickness = cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1
+    (tw, th), baseline = cv2.getTextSize(text, font, scale, thickness)
+    h, w = frame.shape[:2]
+    x = max(0, min(x, w - tw - 6))
+    top = y - th - baseline - 4
+    if top < 0:
+        top = y
+    cv2.rectangle(frame, (x, top), (x + tw + 6, top + th + baseline + 4), color, -1)
+    text_color = (0, 0, 0) if sum(color) > 380 else (255, 255, 255)
+    cv2.putText(frame, text, (x + 3, top + th + 2), font, scale, text_color,
+                thickness, cv2.LINE_AA)
 
 
 def draw_path_trail(frame, positions, color):
@@ -78,18 +93,35 @@ def draw_overlay(frame, state, frame_count=None):
     """
     draw_all_zones(frame, state.zones)
     draw_all_tripwires(frame, state.tripwires)
+    shown = {}
     for t in state.overlay:
         dx, dy = predicted_offset(t, frame_count) if frame_count is not None else (0, 0)
-        if len(t['trail']) > 1:
-            draw_path_trail(frame, t['trail'], t['trail_color'])
-        x1, y1, x2, y2 = t['box']
-        x1, y1, x2, y2 = x1 + dx, y1 + dy, x2 + dx, y2 + dy
+        if t['flagged'] and len(t['trail']) > 1:
+            draw_path_trail(frame, t['trail'][-config.TRAIL_DRAW_LEN:], t['trail_color'])
+        target = [c + d for c, d in zip(t['box'], (dx, dy, dx, dy))]
+        prev = state.display_boxes.get(t['id'])
+        if prev is None or frame_count is None:
+            box = target
+        else:
+            # Carry the last drawn box along the track's velocity, then ease only
+            # the remaining error toward the target. Easing the whole position
+            # would make every box trail a moving object.
+            prev_box, prev_frame = prev
+            ahead = max(0, frame_count - prev_frame)
+            vx, vy = t['velocity']
+            moved = (vx * ahead, vy * ahead, vx * ahead, vy * ahead)
+            keep = 1 - config.BOX_SMOOTHING
+            box = [g + (p + m - g) * keep for p, m, g in zip(prev_box, moved, target)]
+        shown[t['id']] = (box, frame_count)
+        x1, y1, x2, y2 = (int(round(c)) for c in box)
         cv2.rectangle(frame, (x1, y1), (x2, y2), t['color'], 2)
-        cv2.putText(frame, t['label'], (x1, y1-5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, t['color'], 1)
+        draw_label(frame, t['label'], x1, y1, t['color'])
         if t['arrow'] is not None:
             (px, py), (cx, cy) = t['arrow']
-            draw_direction_arrow(frame, (px + dx, py + dy), (cx + dx, cy + dy), t['arrow_color'])
+            mx, my = (x1 + x2) // 2, (y1 + y2) // 2
+            draw_direction_arrow(frame, (mx - (cx - px), my - (cy - py)), (mx, my),
+                                 t['arrow_color'])
+    state.display_boxes = shown
 
 
 def draw_source_label(frame, source_label, is_live):
@@ -166,6 +198,7 @@ class DashboardPublisher:
             tripwires=state.tripwire_summaries(),
             total_persons=state.total_persons,
             total_vehicles=state.total_vehicles,
+            vehicle_log=state.vehicle_log,
             night=state.night,
             surge=state.surge,
             modes=dict(state.modes),

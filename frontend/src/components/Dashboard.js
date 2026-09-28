@@ -6,6 +6,7 @@ import { BRAND, FONT, INK, SERIES, SURFACE, THREAT, aggregateThreat, threatColor
 import { ActivityChart } from './ActivityChart';
 import { DrawOverlay } from './DrawOverlay';
 import { Ic } from './Icons';
+import { VehiclePanel } from './VehiclePanel';
 
 const MODULES = [
   { key: 'loitering', short: 'L', label: 'LOITER DETECT' },
@@ -201,7 +202,7 @@ export function Dashboard({ onBack }) {
     return () => clearInterval(t);
   }, []);
 
-  const { alerts, zones, persons, vehicles, night, surge, modes, setupDone } = telemetry;
+  const { alerts, zones, persons, vehicles, vehicleLog, night, surge, modes, setupDone } = telemetry;
   const threat = useMemo(() => aggregateThreat(zones), [zones]);
   const threatTone = threatColor(threat);
 
@@ -495,6 +496,8 @@ export function Dashboard({ onBack }) {
             <StatTile label="ZONES" value={zones.length} color={INK.secondary} />
             <StatTile label="ALERTS" value={alerts.length} color={threatTone} />
           </div>
+
+          <VehiclePanel vehicles={vehicleLog} panelStyle={panel} reduced={reduced} />
 
           <section style={{ ...panel, padding: '12px' }}>
             <PanelCorners color={INK.line} size={8} />

@@ -4,6 +4,7 @@ import time
 from collections import deque
 
 from app import config
+from app.vehicles import VehicleRegistry
 
 
 def new_zone(name, points):
@@ -61,6 +62,9 @@ class DetectionState:
         self.loiter_alerted = set()
 
         self.overlay = []               # per-track draw data from the last detection
+        self.display_boxes = {}         # track_id -> (box as last drawn, frame drawn on)
+        self.vehicles = VehicleRegistry()
+        self.vehicle_log = []
         self.last_evict = 0
 
         self.person_count_history = deque(maxlen=config.SURGE_WINDOW + 1)
