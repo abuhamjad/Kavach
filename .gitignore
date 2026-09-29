@@ -46,9 +46,9 @@ pyvenv.cfg
 *.mkv
 *.webm
 # The one clip the deployed backend runs detection on — versioned via Git LFS
-# (see .gitattributes) so the 82 MB binary stays out of normal git history. Other
+# (see .gitattributes), since it exceeds GitHub's 100 MB file limit. Other
 # footage stays local to keep LFS storage and bandwidth down.
-!backend/data/videos/Person Detection.mp4
+!backend/data/videos/Vehicle and Surge Detection.mp4
 
 # ── Runtime output ───────────────────────────────────────────────────────────
 alert_log_*.txt
