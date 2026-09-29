@@ -53,6 +53,22 @@ def track_velocity(state, track_id, prev_position, prev_seen, position, frame_co
     return v
 
 
+def _publish_hardware_event(event_type, threat, sector=None, person_id=None, vehicle_plate=None, **extra):
+    """Non-blocking publish of a hardware event to bus."""
+    try:
+        event = {"event": event_type, "threat": threat}
+        if sector:
+            event["sector"] = sector
+        if person_id is not None:
+            event["person_id"] = person_id
+        if vehicle_plate:
+            event["vehicle_plate"] = vehicle_plate
+        event.update(extra)
+        bus.publish_hardware_event(event)
+    except Exception:
+        pass  # Never let hardware events crash detection
+
+
 def analyse_frame(frame, results, state, frame_count):
     """Update tracking state and record the overlay for one detected frame.
 
@@ -90,6 +106,11 @@ def analyse_frame(frame, results, state, frame_count):
                 state.suspicious_ids.add(track_id)
                 if not was_suspicious:
                     state.add_alert(f"Suspicious movement! {label} ID:{track_id}")
+                    _publish_hardware_event(
+                        "suspicious", "medium",
+                        person_id=track_id,
+                        label=label,
+                    )
 
             box = (x1, y1, x2, y2)
 
@@ -105,6 +126,11 @@ def analyse_frame(frame, results, state, frame_count):
                             segments_intersect(prev, (cx, cy), tw['p1'], tw['p2'])):
                         state.crossed_ids.add(track_id)
                         state.add_alert(f"{label} crossed {tw['name']}!")
+                        _publish_hardware_event(
+                            "tripwire", "high",
+                            sector=tw['name'],
+                            person_id=track_id,
+                        )
                         break
 
             prev_position = state.prev_positions.get(track_id)
@@ -134,6 +160,11 @@ def analyse_frame(frame, results, state, frame_count):
                         if key not in state.loiter_alerted:
                             state.add_alert(f"Loitering in {zone['name']}! ID:{track_id}")
                             state.loiter_alerted.add(key)
+                            _publish_hardware_event(
+                                "loitering", "medium",
+                                sector=zone['name'],
+                                person_id=track_id,
+                            )
 
             name = f"{'person' if is_person else 'vehicle'}#{track_id}"
             watchlisted = False
@@ -147,6 +178,12 @@ def analyse_frame(frame, results, state, frame_count):
                 if newly_flagged:
                     state.add_alert(f"WATCHLIST HIT: {profile['plate']} "
                                     f"({profile['make']}) — {profile['reason']}")
+                    _publish_hardware_event(
+                        "watchlist", "critical",
+                        vehicle_plate=profile['plate'],
+                        make=profile['make'],
+                        reason=profile['reason'],
+                    )
 
             is_suspicious = track_id in state.suspicious_ids
             is_loitering  = track_id in state.loitering_ids
@@ -199,6 +236,12 @@ def analyse_frame(frame, results, state, frame_count):
         if previous is not None:
             state.add_alert(f"{zone['name']} threat: {previous} -> {zone['threat']}",
                             THREAT_COLORS[zone['threat']])
+            _publish_hardware_event(
+                "zone_threat",
+                zone['threat'],
+                sector=zone['name'],
+                previous=previous,
+            )
 
     state.surge = detect_surge(state.person_count_history, total_persons) if surge_on else False
     state.person_count_history.append(total_persons)

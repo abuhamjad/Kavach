@@ -20,6 +20,9 @@ ALLOWED_ORIGINS = os.getenv(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.hardware import hardware
+    hardware.connect()
+
     def start_detector():
         from app import detect
         detect.run()

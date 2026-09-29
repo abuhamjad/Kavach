@@ -73,3 +73,33 @@ def take_commands():
         drained = pending_commands[:]
         del pending_commands[:]
         return drained
+
+
+# ── Hardware events ───────────────────────────────────────────────────────────
+#
+# Thread-safe pathway for hardware events (e.g. ESP32 alerts, LED triggers).
+# Bounded queue: oldest events are dropped when full to prevent memory growth.
+
+MAX_HARDWARE_EVENTS = 64
+
+_hardware_events = []
+
+
+def publish_hardware_event(event):
+    """Queue a hardware event for consumption. Thread-safe, bounded.
+
+    Args:
+        event: dict with fields like event, threat, sector, person_id, etc.
+    """
+    with state_lock:
+        _hardware_events.append(dict(event))
+        while len(_hardware_events) > MAX_HARDWARE_EVENTS:
+            _hardware_events.pop(0)
+
+
+def drain_hardware_events():
+    """Atomically drain all pending hardware events. Returns list of dicts."""
+    with state_lock:
+        drained = _hardware_events[:]
+        del _hardware_events[:]
+        return drained
