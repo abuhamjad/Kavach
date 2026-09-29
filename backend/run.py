@@ -17,26 +17,17 @@ from app import config
 
 
 def print_banner(local_ip):
-    token = config.AUTH_TOKEN
-    mobile_url = f"http://{local_ip}:{config.PORT}/mobile#token={token}"
-
     print("\n" + "=" * 55)
     print("  KAVACH BORDER SURVEILLANCE SYSTEM")
     print("=" * 55)
     print(f"  Backend : http://localhost:{config.PORT}")
+    print(f"  Frontend: http://localhost:3000")
     print(f"  Mobile  : http://{local_ip}:{config.PORT}/mobile")
-    print("=" * 55)
-    print("\n  OPERATOR TOKEN:")
-    print(f"  {token}")
-    if config.AUTH_TOKEN_IS_EPHEMERAL:
-        print("  (new token each run — set KAVACH_TOKEN to keep it stable)")
-    print("  Required to control detection or view the feed.")
     print("=" * 55)
     print("\n  MOBILE SETUP:")
     print("  1. Connect your phone to the SAME WiFi")
     print("  2. Open browser on phone")
-    print(f"  3. Go to: {mobile_url}")
-    print("     (or open /mobile and paste the token above)")
+    print(f"  3. Go to: http://{local_ip}:{config.PORT}/mobile")
     print("  4. Add to home screen for app-like experience")
     print("=" * 55 + "\n")
 

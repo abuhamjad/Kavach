@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { WS_URL, rejectToken, wsProtocols } from './api';
+import { WS_URL } from './api';
 import { DEFAULT_FRAME_SIZE, threatToScore } from '../theme';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,10 +156,7 @@ export function useSurveillance() {
 
       let ws;
       try {
-        // The operator token rides in the subprotocol list — the WebSocket API
-        // has no way to set headers, and the server rejects the handshake
-        // without it.
-        ws = new WebSocket(WS_URL, wsProtocols());
+        ws = new WebSocket(WS_URL);
       } catch {
         scheduleReconnect();
         return;
@@ -217,18 +214,9 @@ export function useSurveillance() {
         tenSBucket.current.push(sample);
       };
 
-      const onDown = (event) => {
+      const onDown = () => {
         if (cancelled) return;
         setConnected(false);
-
-        // 1008 (policy violation) is the server refusing the handshake: bad or
-        // missing operator token. Redialling with the same credential would
-        // loop forever, so hand it to api.js, which drops the token and
-        // re-prompts.
-        if (event?.code === 1008) {
-          rejectToken();
-          return;
-        }
         scheduleReconnect();
       };
 
