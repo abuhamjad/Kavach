@@ -27,8 +27,8 @@ FRONTEND_BUILD_DIR = os.path.join(PROJECT_DIR, "frontend", "build")
 # ── Model / media ────────────────────────────────────────────────────────────
 # KAVACH_MODEL swaps in a lighter checkpoint on small hosts (Render sets yolov8n.pt).
 MODEL_FILE = os.path.join(MODELS_DIR, os.environ.get("KAVACH_MODEL", "yolov8m.pt"))
-VIDEO_FILE = os.path.join(VIDEOS_DIR, "Vehicle and Surge Detection.mp4")
-# VIDEO_FILE = os.path.join(VIDEOS_DIR, "Person Detection.mp4")
+# VIDEO_FILE = os.path.join(VIDEOS_DIR, "Vehicle and Surge Detection.mp4")
+VIDEO_FILE = os.path.join(VIDEOS_DIR, "Person Detection.mp4")
 LIVE_URL   = "https://www.youtube.com/watch?v=zMCea32gpmg"
 
 # ── Server ───────────────────────────────────────────────────────────────────

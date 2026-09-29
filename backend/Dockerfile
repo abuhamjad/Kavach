@@ -23,8 +23,8 @@ COPY . .
 
 # The demo video is stored in Git LFS. If the clone brought only the pointer
 # file (a few hundred bytes), fetch the real clip from GitHub's LFS media host.
-ARG VIDEO_URL="https://media.githubusercontent.com/media/abuhamjad/Kavach/main/backend/data/videos/Vehicle%20and%20Surge%20Detection.mp4"
-RUN f="data/videos/Vehicle and Surge Detection.mp4"; \
+ARG VIDEO_URL="https://media.githubusercontent.com/media/abuhamjad/Kavach/main/backend/data/videos/Person%20Detection.mp4"
+RUN f="data/videos/Person Detection.mp4"; \
     if [ "$(stat -c%s "$f" 2>/dev/null || echo 0)" -lt 1000000 ]; then \
       echo "Video is an LFS pointer; downloading" && curl -fL -o "$f" "$VIDEO_URL"; \
     fi
