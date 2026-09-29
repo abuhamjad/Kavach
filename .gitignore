@@ -45,9 +45,10 @@ pyvenv.cfg
 *.mov
 *.mkv
 *.webm
-# Demo footage the deployed backend runs detection on — versioned via Git LFS
-# (see .gitattributes), since one clip exceeds GitHub's 100 MB file limit.
-!backend/data/videos/*.mp4
+# The one clip the deployed backend runs detection on — versioned via Git LFS
+# (see .gitattributes), since it exceeds GitHub's 100 MB file limit. Other
+# footage stays local to keep LFS storage and bandwidth down.
+!backend/data/videos/Vehicle and Surge Detection.mp4
 
 # ── Runtime output ───────────────────────────────────────────────────────────
 alert_log_*.txt

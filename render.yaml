@@ -1,0 +1,22 @@
+# Render Blueprint — the Kavach detection backend (FastAPI + YOLO).
+# The React frontend is deployed separately on Vercel; point it here with
+# REACT_APP_API_URL=https://<this service>.onrender.com in the Vercel project.
+services:
+  - type: web
+    name: kavach-backend
+    runtime: docker
+    plan: free
+    branch: main
+    autoDeploy: true
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: KAVACH_MODEL
+        value: yolov8n.pt
+      - key: KAVACH_ALLOWED_ORIGINS
+        value: https://kavach-theta-nine.vercel.app

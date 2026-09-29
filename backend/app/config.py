@@ -25,7 +25,8 @@ LOGS_DIR     = os.path.join(BACKEND_DIR, "logs")
 FRONTEND_BUILD_DIR = os.path.join(PROJECT_DIR, "frontend", "build")
 
 # ── Model / media ────────────────────────────────────────────────────────────
-MODEL_FILE = os.path.join(MODELS_DIR, "yolov8m.pt")
+# KAVACH_MODEL swaps in a lighter checkpoint on small hosts (Render sets yolov8n.pt).
+MODEL_FILE = os.path.join(MODELS_DIR, os.environ.get("KAVACH_MODEL", "yolov8m.pt"))
 VIDEO_FILE = os.path.join(VIDEOS_DIR, "Vehicle and Surge Detection.mp4")
 # VIDEO_FILE = os.path.join(VIDEOS_DIR, "Person Detection.mp4")
 LIVE_URL   = "https://www.youtube.com/watch?v=zMCea32gpmg"
@@ -36,7 +37,8 @@ LIVE_URL   = "https://www.youtube.com/watch?v=zMCea32gpmg"
 # every state-changing endpoint and the video socket now require a token (see
 # AUTH_TOKEN below). Set KAVACH_HOST=127.0.0.1 for a desktop-only deployment.
 HOST = os.environ.get("KAVACH_HOST", "0.0.0.0")
-PORT = int(os.environ.get("KAVACH_PORT", "8000"))
+# PORT is what Render (and most PaaS hosts) assign; KAVACH_PORT still wins locally.
+PORT = int(os.environ.get("KAVACH_PORT") or os.environ.get("PORT", "8000"))
 
 DEV_SERVER_PORT = 3000      # CRA's `npm start` server, during frontend development
 
