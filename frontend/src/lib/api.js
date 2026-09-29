@@ -1,19 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  Backend transport.
 //
-//  Origins are derived from window.location so the console works from any device
-//  on the LAN and survives being served over TLS. Override at build time with
-//  REACT_APP_API_ORIGIN (e.g. "https://kavach.local:8443") when the API is not
-//  co-hosted with the bundle.
+//  Override at build time with REACT_APP_API_URL / REACT_APP_WS_URL when the
+//  API is deployed separately (e.g. on Render) while the frontend is on Vercel.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// run.py serves the React build from the same origin as the API, so same-origin
-// is the correct default. The :3000 case is `npm start`, where CRA's dev server
-// holds port 3000 and the backend is on 8000.
 const DEV_API_PORT = '8000';
 
 function resolveHttpOrigin() {
-  const configured = process.env.REACT_APP_API_ORIGIN;
+  const configured = process.env.REACT_APP_API_URL;
   if (configured) return configured.replace(/\/+$/, '');
 
   const { protocol, hostname, port } = window.location;
@@ -25,7 +20,7 @@ export const API_ORIGIN = resolveHttpOrigin();
 
 // ws: for http:, wss: for https: — a hardcoded ws:// is blocked as mixed content
 // on a TLS-served page.
-export const WS_URL = `${API_ORIGIN.replace(/^http/, 'ws')}/ws`;
+export const WS_URL = process.env.REACT_APP_WS_URL || `${API_ORIGIN.replace(/^http/, 'ws')}/ws`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Operator token.

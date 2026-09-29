@@ -2,20 +2,34 @@ import asyncio
 import json
 import os
 import secrets
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Annotated, List, Literal
 
 from app import config
 
-app = FastAPI()
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000"
+).split(",")
 
-# An explicit allowlist, not ["*"]. With a wildcard, any page an operator visited
-# could script cross-site requests against the detection server on their LAN.
-ALLOWED_ORIGINS = config.allowed_origins()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    def start_detector():
+        from app import detect
+        detect.run()
+
+    threading.Thread(target=start_detector, daemon=True).start()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -212,59 +226,7 @@ def serve_mobile_css():
 def serve_mobile_js():
     return FileResponse(os.path.join(config.WEB_DIR, "mobile.js"), media_type="text/javascript")
 
-# ── Static (React dashboard) ─────────────────────────────────────────────────
-STATIC_PATH = config.STATIC_DIR
-
-# The inner directory, not the outer one. StaticFiles raises at construction if
-# its directory is missing, and that happens at import — so checking only the
-# outer path meant a half-copied build took the whole server down on startup
-# instead of just serving no dashboard.
-_STATIC_ASSETS = os.path.join(STATIC_PATH, "static")
-if os.path.isdir(_STATIC_ASSETS):
-    app.mount("/static", StaticFiles(directory=_STATIC_ASSETS), name="static")
-
-# Paths the API owns. A GET to one of these fell through to the SPA catch-all
-# and returned 200 + index.html, so a typo'd endpoint or a wrong-method call
-# looked like a success.
-API_PATHS = {
-    "/add_zone", "/add_tripwire", "/start_detection",
-    "/stop_detection", "/set_mode", "/clear_zones", "/remove_shape", "/auth/check", "/ws",
-}
-
-
-def _serve_index():
-    index = os.path.join(STATIC_PATH, "index.html")
-    if os.path.exists(index):
-        return FileResponse(index)
-    return HTMLResponse(
-        "<h1>Dashboard build not found.</h1>"
-        "<p>Run <code>npm run build</code> in frontend/, then restart.</p>",
-        status_code=503,
-    )
-
-@app.get("/")
-def serve_react():
-    return _serve_index()
-
-@app.get("/{full_path:path}")
-def catch_all(full_path: str):
-    if full_path == "mobile":
-        return serve_mobile()
-
-    path = "/" + full_path
-    if path in API_PATHS:
-        raise HTTPException(status_code=405, detail="Method not allowed on this endpoint")
-
-    # Anything with an extension is an asset request, not a client-side route.
-    # Build-root assets (manifest.json, favicon.ico, logos, robots.txt) are
-    # served from the build; anything else 404s rather than getting index.html,
-    # which would be HTML served as a .js/.css/.png and fail far from the cause.
-    if os.path.splitext(full_path)[1]:
-        root = os.path.realpath(STATIC_PATH)
-        asset = os.path.realpath(os.path.join(root, full_path))
-        # realpath + prefix check: no `../` escape out of the build directory.
-        if asset.startswith(root + os.sep) and os.path.isfile(asset):
-            return FileResponse(asset)
-        raise HTTPException(status_code=404, detail="Not found")
-
-    return _serve_index()
+# ── Health check ───────────────────────────────────────────────────────────────
+@app.get("/health")
+def health():
+    return {"status": "ok"}
